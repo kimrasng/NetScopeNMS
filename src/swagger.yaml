@@ -1,0 +1,1884 @@
+openapi: 3.0.3
+info:
+  title: NetScopeNMS REST API
+  description: |
+    AI 기반 네트워크 관리 시스템 (Network Management System) API 문서
+    
+    ## 주요 기능
+    - **장비 관리**: 네트워크 장비 CRUD, SNMP 연결 테스트, 인터페이스 검색
+    - **메트릭 수집**: 실시간 및 이력 데이터 조회 (CPU, 메모리, 트래픽 등)
+    - **알람 관리**: 임계값 기반 알람 생성 및 관리
+    - **AI 분석**: OpenAI 기반 근본 원인 분석, 예측, 리포트 생성
+    - **사용자 관리**: JWT 기반 인증, 역할 기반 권한 관리
+    
+    ## 인증
+    Bearer Token (JWT) 방식을 사용합니다.
+    ```
+    Authorization: Bearer <token>
+    ```
+    
+    ## 오류 응답 형식
+    ```json
+    {
+      "success": false,
+      "error": "Error type",
+      "message": "상세 메시지",
+      "details": [] // 선택적 상세 정보
+    }
+    ```
+    
+  version: 1.0.0
+  contact:
+    name: NetScopeNMS Team
+    email: support@netscopenms.dev
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Development server
+  - url: https://api.netscopenms.com/api/v1
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: 사용자 인증 (로그인, 회원가입)
+  - name: Profile
+    description: 사용자 프로필 관리
+  - name: User Management
+    description: 사용자 관리 (관리자 전용)
+  - name: Devices
+    description: 네트워크 장비 관리
+  - name: Metrics
+    description: 메트릭 데이터 조회
+  - name: Alarms
+    description: 알람 조회 및 처리
+  - name: Alarm Rules
+    description: 알람 규칙 관리
+  - name: AI Analysis
+    description: AI 분석 및 예측
+  - name: AI Reports
+    description: AI 리포트 생성
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ==================== 인증 ====================
+  /users/register:
+    post:
+      tags:
+        - Authentication
+      summary: 회원가입
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - email
+                - password
+              properties:
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 50
+                  pattern: ^[a-zA-Z0-9_]+$
+                  example: john_doe
+                  description: 사용자명 (영문, 숫자, 밑줄만 허용)
+                email:
+                  type: string
+                  format: email
+                  example: john@example.com
+                password:
+                  type: string
+                  minLength: 8
+                  example: SecurePass123
+                  description: 대문자, 소문자, 숫자 포함 필수
+                role:
+                  type: string
+                  enum: [admin, user, viewer]
+                  default: viewer
+      responses:
+        '201':
+          description: 회원가입 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /users/login:
+    post:
+      tags:
+        - Authentication
+      summary: 로그인
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: john@example.com
+                password:
+                  type: string
+                  example: SecurePass123
+      responses:
+        '200':
+          description: 로그인 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/logout:
+    post:
+      tags:
+        - Authentication
+      summary: 로그아웃
+      responses:
+        '200':
+          description: 로그아웃 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # ==================== 프로필 ====================
+  /users/me:
+    get:
+      tags:
+        - Profile
+      summary: 현재 사용자 프로필 조회
+      responses:
+        '200':
+          description: 프로필 정보
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+    put:
+      tags:
+        - Profile
+      summary: 프로필 수정
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: 수정 성공
+
+  /users/me/password:
+    put:
+      tags:
+        - Profile
+      summary: 비밀번호 변경
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 8
+      responses:
+        '200':
+          description: 변경 성공
+        '400':
+          description: 현재 비밀번호 불일치
+
+  # ==================== 사용자 관리 ====================
+  /users:
+    get:
+      tags:
+        - User Management
+      summary: 사용자 목록 조회 (관리자)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [admin, user, viewer]
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 사용자 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      users:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+    post:
+      tags:
+        - User Management
+      summary: 사용자 생성 (관리자)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: 생성 성공
+
+  /users/{id}:
+    get:
+      tags:
+        - User Management
+      summary: 사용자 상세 조회 (관리자)
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: 사용자 정보
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - User Management
+      summary: 사용자 수정 (관리자)
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: 수정 성공
+    delete:
+      tags:
+        - User Management
+      summary: 사용자 삭제 (관리자)
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: 삭제 성공
+
+  /users/{id}/toggle:
+    patch:
+      tags:
+        - User Management
+      summary: 사용자 활성화/비활성화 (관리자)
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: 토글 성공
+
+  /users/{id}/reset-password:
+    post:
+      tags:
+        - User Management
+      summary: 비밀번호 초기화 (관리자)
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - newPassword
+              properties:
+                newPassword:
+                  type: string
+                  minLength: 8
+      responses:
+        '200':
+          description: 초기화 성공
+
+  # ==================== 장비 관리 ====================
+  /devices:
+    get:
+      tags:
+        - Devices
+      summary: 장비 목록 조회
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [up, down, warning, unknown, all]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [router, switch, server, firewall, access_point, other, all]
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: 이름, IP, 위치 검색
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [name, ip_address, status, device_type, created_at, last_poll_time]
+            default: name
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [ASC, DESC]
+            default: ASC
+      responses:
+        '200':
+          description: 장비 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      devices:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Device'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+    post:
+      tags:
+        - Devices
+      summary: 장비 등록
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCreate'
+      responses:
+        '201':
+          description: 등록 성공
+        '409':
+          description: IP 주소 중복
+
+  /devices/summary:
+    get:
+      tags:
+        - Devices
+      summary: 장비 상태 요약
+      responses:
+        '200':
+          description: 장비 요약 통계
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      byStatus:
+                        type: object
+                        properties:
+                          up:
+                            type: integer
+                          down:
+                            type: integer
+                          warning:
+                            type: integer
+                          unknown:
+                            type: integer
+                      byType:
+                        type: object
+                        additionalProperties:
+                          type: integer
+
+  /devices/test-connection:
+    post:
+      tags:
+        - Devices
+      summary: 신규 장비 SNMP 연결 테스트
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SnmpTestRequest'
+      responses:
+        '200':
+          description: 테스트 결과
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SnmpTestResponse'
+
+  /devices/{id}:
+    get:
+      tags:
+        - Devices
+      summary: 장비 상세 조회
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: 장비 상세 정보
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      device:
+                        $ref: '#/components/schemas/DeviceDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Devices
+      summary: 장비 수정
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceUpdate'
+      responses:
+        '200':
+          description: 수정 성공
+    delete:
+      tags:
+        - Devices
+      summary: 장비 삭제
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: 삭제 성공
+
+  /devices/{id}/test-connection:
+    post:
+      tags:
+        - Devices
+      summary: 기존 장비 SNMP 연결 테스트
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: 테스트 결과
+
+  /devices/{id}/discover-interfaces:
+    post:
+      tags:
+        - Devices
+      summary: 인터페이스 검색
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: 검색된 인터페이스 목록
+
+  /devices/{id}/interfaces:
+    get:
+      tags:
+        - Devices
+      summary: 장비 인터페이스 목록
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [up, down, testing, unknown, dormant]
+      responses:
+        '200':
+          description: 인터페이스 목록
+
+  /devices/{id}/toggle:
+    patch:
+      tags:
+        - Devices
+      summary: 장비 활성화/비활성화 토글
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: 토글 성공
+
+  /devices/{id}/poll:
+    post:
+      tags:
+        - Devices
+      summary: 수동 폴링 실행
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: 폴링 결과
+
+  # ==================== 메트릭 ====================
+  /metrics/dashboard:
+    get:
+      tags:
+        - Metrics
+      summary: 대시보드 요약 정보
+      responses:
+        '200':
+          description: 대시보드 데이터
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      devices:
+                        type: object
+                        description: 장비 상태 요약
+                      topCpuDevices:
+                        type: array
+                        items:
+                          type: object
+                      topMemoryDevices:
+                        type: array
+                        items:
+                          type: object
+
+  /metrics/devices/{deviceId}:
+    get:
+      tags:
+        - Metrics
+      summary: 장비 메트릭 조회
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPath'
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d, 30d, 90d, custom]
+            default: 24h
+          description: 조회 기간
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [raw, 5m, 1h, 1d, auto]
+            default: auto
+          description: 데이터 간격 (auto는 기간에 따라 자동 선택)
+        - name: metrics
+          in: query
+          schema:
+            type: string
+            default: cpu,memory,traffic_in,traffic_out
+          description: 조회할 메트릭 (쉼표 구분)
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: 시작 시간 (custom 기간일 때)
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: 종료 시간 (custom 기간일 때)
+      responses:
+        '200':
+          description: 메트릭 데이터
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricResponse'
+
+  /metrics/devices/{deviceId}/latest:
+    get:
+      tags:
+        - Metrics
+      summary: 최신 메트릭 조회
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPath'
+      responses:
+        '200':
+          description: 최신 메트릭 값
+
+  /metrics/devices/{deviceId}/statistics:
+    get:
+      tags:
+        - Metrics
+      summary: 메트릭 통계 조회
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPath'
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [24h, 7d, 30d]
+            default: 7d
+      responses:
+        '200':
+          description: 통계 데이터
+
+  /metrics/devices/{deviceId}/export:
+    get:
+      tags:
+        - Metrics
+      summary: 메트릭 데이터 내보내기
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPath'
+        - name: period
+          in: query
+          schema:
+            type: string
+            default: 24h
+        - name: metrics
+          in: query
+          schema:
+            type: string
+            default: cpu,memory,traffic_in,traffic_out
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        '200':
+          description: 메트릭 파일
+
+  /metrics/interfaces/{interfaceId}:
+    get:
+      tags:
+        - Metrics
+      summary: 인터페이스 메트릭 조회
+      parameters:
+        - name: interfaceId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d, 30d, 90d, custom]
+            default: 24h
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [raw, 5m, 1h, 1d, auto]
+            default: auto
+      responses:
+        '200':
+          description: 인터페이스 메트릭 데이터
+
+  # ==================== 알람 ====================
+  /alarms:
+    get:
+      tags:
+        - Alarms
+      summary: 알람 목록 조회
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, acknowledged, resolved, all]
+            default: all
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [info, warning, critical]
+        - name: deviceId
+          in: query
+          schema:
+            type: integer
+        - name: metricType
+          in: query
+          schema:
+            type: string
+            enum: [cpu, memory, traffic_in, traffic_out, bandwidth_util, errors_in, errors_out, connectivity]
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [created_at, updated_at, severity, status, occurrence_count]
+            default: created_at
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [ASC, DESC]
+            default: DESC
+      responses:
+        '200':
+          description: 알람 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      alarms:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Alarm'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  /alarms/summary:
+    get:
+      tags:
+        - Alarms
+      summary: 알람 요약 통계
+      responses:
+        '200':
+          description: 알람 통계
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      active:
+                        type: object
+                      acknowledged:
+                        type: object
+                      resolved:
+                        type: object
+                      totalActive:
+                        type: integer
+                      totalCritical:
+                        type: integer
+
+  /alarms/bulk-acknowledge:
+    patch:
+      tags:
+        - Alarms
+      summary: 알람 일괄 확인 처리
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - alarmIds
+              properties:
+                alarmIds:
+                  type: array
+                  items:
+                    type: integer
+                  example: [1, 2, 3]
+                note:
+                  type: string
+                  example: 점검 완료
+      responses:
+        '200':
+          description: 처리 완료
+
+  /alarms/bulk-resolve:
+    patch:
+      tags:
+        - Alarms
+      summary: 알람 일괄 해결 처리
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - alarmIds
+              properties:
+                alarmIds:
+                  type: array
+                  items:
+                    type: integer
+                note:
+                  type: string
+      responses:
+        '200':
+          description: 처리 완료
+
+  /alarms/{id}:
+    get:
+      tags:
+        - Alarms
+      summary: 알람 상세 조회
+      parameters:
+        - $ref: '#/components/parameters/AlarmId'
+      responses:
+        '200':
+          description: 알람 상세
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      alarm:
+                        $ref: '#/components/schemas/AlarmDetail'
+
+  /alarms/{id}/acknowledge:
+    patch:
+      tags:
+        - Alarms
+      summary: 알람 확인 처리
+      parameters:
+        - $ref: '#/components/parameters/AlarmId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  description: 확인 메모
+      responses:
+        '200':
+          description: 확인 처리 완료
+
+  /alarms/{id}/resolve:
+    patch:
+      tags:
+        - Alarms
+      summary: 알람 해결 처리
+      parameters:
+        - $ref: '#/components/parameters/AlarmId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  description: 해결 메모
+      responses:
+        '200':
+          description: 해결 처리 완료
+
+  # ==================== 알람 규칙 ====================
+  /alarms/rules:
+    get:
+      tags:
+        - Alarm Rules
+      summary: 알람 규칙 목록 조회
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: isEnabled
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: 알람 규칙 목록
+    post:
+      tags:
+        - Alarm Rules
+      summary: 알람 규칙 생성
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlarmRuleCreate'
+      responses:
+        '201':
+          description: 생성 성공
+
+  /alarms/rules/{id}:
+    get:
+      tags:
+        - Alarm Rules
+      summary: 알람 규칙 상세 조회
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 규칙 상세
+    put:
+      tags:
+        - Alarm Rules
+      summary: 알람 규칙 수정
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlarmRuleUpdate'
+      responses:
+        '200':
+          description: 수정 성공
+    delete:
+      tags:
+        - Alarm Rules
+      summary: 알람 규칙 삭제
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 삭제 성공
+
+  /alarms/rules/{id}/toggle:
+    patch:
+      tags:
+        - Alarm Rules
+      summary: 알람 규칙 활성화/비활성화 토글
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 토글 성공
+
+  # ==================== AI 분석 ====================
+  /ai/statistics:
+    get:
+      tags:
+        - AI Analysis
+      summary: AI 분석 통계
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [24h, 7d, 30d]
+            default: 7d
+      responses:
+        '200':
+          description: 분석 통계
+
+  /ai/history:
+    get:
+      tags:
+        - AI Analysis
+      summary: AI 분석 이력 조회
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: deviceId
+          in: query
+          schema:
+            type: integer
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [alarm_rca, prediction, daily_report, weekly_report, anomaly_detection]
+      responses:
+        '200':
+          description: 분석 이력 목록
+
+  /ai/history/{id}:
+    get:
+      tags:
+        - AI Analysis
+      summary: AI 분석 상세 조회
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 분석 결과 상세
+    delete:
+      tags:
+        - AI Analysis
+      summary: AI 분석 결과 삭제
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 삭제 성공
+
+  /ai/devices/{deviceId}/analyze:
+    post:
+      tags:
+        - AI Analysis
+      summary: 장비 AI 분석 요청
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                forceRefresh:
+                  type: boolean
+                  default: false
+                  description: 캐시 무시 여부
+      responses:
+        '200':
+          description: 분석 결과
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIAnalysisResponse'
+
+  /ai/devices/{deviceId}/predict:
+    post:
+      tags:
+        - AI Analysis
+      summary: 장비 예측 분석
+      parameters:
+        - $ref: '#/components/parameters/DeviceIdPath'
+      responses:
+        '200':
+          description: 예측 결과
+
+  /ai/alarms/{alarmId}/analyze:
+    post:
+      tags:
+        - AI Analysis
+      summary: 알람 근본 원인 분석
+      parameters:
+        - name: alarmId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 분석 결과
+
+  /ai/reports/daily:
+    post:
+      tags:
+        - AI Reports
+      summary: 일일 리포트 생성
+      responses:
+        '200':
+          description: 일일 리포트
+
+  /ai/reports/weekly:
+    post:
+      tags:
+        - AI Reports
+      summary: 주간 리포트 생성
+      responses:
+        '200':
+          description: 주간 리포트
+
+  /ai/predict-all:
+    post:
+      tags:
+        - AI Analysis
+      summary: 전체 장비 예측 분석 (관리자)
+      description: 모든 활성 장비에 대해 예측 분석을 실행합니다. 시간이 오래 걸릴 수 있습니다.
+      responses:
+        '200':
+          description: 전체 예측 결과
+
+  /ai/cache/clear:
+    post:
+      tags:
+        - AI Analysis
+      summary: AI 분석 캐시 초기화 (관리자)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deviceId:
+                  type: integer
+                  description: 특정 장비만 초기화
+                type:
+                  type: string
+                  description: 특정 분석 타입만 초기화
+      responses:
+        '200':
+          description: 캐시 초기화 완료
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT 토큰을 사용한 인증
+        
+        로그인 후 받은 토큰을 `Authorization: Bearer <token>` 형식으로 전송
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: 페이지 번호
+
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: 페이지당 항목 수
+
+    DeviceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: 장비 ID
+
+    DeviceIdPath:
+      name: deviceId
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: 장비 ID
+
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: 사용자 ID
+
+    AlarmId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: 알람 ID
+
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: 전체 항목 수
+        page:
+          type: integer
+          description: 현재 페이지
+        limit:
+          type: integer
+          description: 페이지당 항목 수
+        totalPages:
+          type: integer
+          description: 전체 페이지 수
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, user, viewer]
+        isActive:
+          type: boolean
+        lastLogin:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    UserCreate:
+      type: object
+      required:
+        - username
+        - email
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        role:
+          type: string
+          enum: [admin, user, viewer]
+          default: viewer
+
+    UserUpdate:
+      type: object
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, user, viewer]
+        is_active:
+          type: boolean
+
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/User'
+            token:
+              type: string
+              description: JWT 토큰
+
+    Device:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        ip_address:
+          type: string
+          format: ipv4
+        device_type:
+          type: string
+          enum: [router, switch, server, firewall, access_point, other]
+        vendor:
+          type: string
+        model:
+          type: string
+        location:
+          type: string
+        status:
+          type: string
+          enum: [up, down, warning, unknown]
+        is_enabled:
+          type: boolean
+        snmp_version:
+          type: string
+          enum: ['1', '2c', '3']
+        poll_interval:
+          type: integer
+        last_poll_time:
+          type: string
+          format: date-time
+        interfaceCount:
+          type: integer
+
+    DeviceDetail:
+      allOf:
+        - $ref: '#/components/schemas/Device'
+        - type: object
+          properties:
+            description:
+              type: string
+            snmp_port:
+              type: integer
+            sys_descr:
+              type: string
+            sys_name:
+              type: string
+            sys_uptime:
+              type: integer
+            uptimeFormatted:
+              type: string
+            interfaces:
+              type: array
+              items:
+                $ref: '#/components/schemas/Interface'
+            credentials:
+              type: object
+
+    DeviceCreate:
+      type: object
+      required:
+        - name
+        - ip_address
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          example: Core-Router-01
+        ip_address:
+          type: string
+          format: ipv4
+          example: 192.168.1.1
+        device_type:
+          type: string
+          enum: [router, switch, server, firewall, access_point, other]
+          default: other
+        vendor:
+          type: string
+          example: Cisco
+        model:
+          type: string
+          example: ISR 4331
+        location:
+          type: string
+          example: 본관 서버실
+        description:
+          type: string
+        snmp_version:
+          type: string
+          enum: ['1', '2c', '3']
+          default: '2c'
+        snmp_port:
+          type: integer
+          default: 161
+        poll_interval:
+          type: integer
+          minimum: 30
+          maximum: 3600
+          default: 60
+        community:
+          type: string
+          description: SNMPv1/v2c 커뮤니티 문자열
+          example: public
+        username:
+          type: string
+          description: SNMPv3 사용자명
+        security_level:
+          type: string
+          enum: [noAuthNoPriv, authNoPriv, authPriv]
+          description: SNMPv3 보안 레벨
+        auth_protocol:
+          type: string
+          enum: [MD5, SHA, SHA-256, SHA-384, SHA-512]
+        auth_password:
+          type: string
+        priv_protocol:
+          type: string
+          enum: [DES, AES, AES-128, AES-192, AES-256]
+        priv_password:
+          type: string
+
+    DeviceUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        ip_address:
+          type: string
+          format: ipv4
+        device_type:
+          type: string
+          enum: [router, switch, server, firewall, access_point, other]
+        vendor:
+          type: string
+        model:
+          type: string
+        location:
+          type: string
+        description:
+          type: string
+        snmp_version:
+          type: string
+          enum: ['1', '2c', '3']
+        snmp_port:
+          type: integer
+        poll_interval:
+          type: integer
+        is_enabled:
+          type: boolean
+
+    Interface:
+      type: object
+      properties:
+        id:
+          type: integer
+        if_index:
+          type: integer
+        if_name:
+          type: string
+        if_descr:
+          type: string
+        if_type:
+          type: integer
+        if_speed:
+          type: integer
+          description: 인터페이스 속도 (bps)
+        if_status:
+          type: string
+          enum: [up, down, testing, unknown, dormant, notPresent, lowerLayerDown]
+        if_admin_status:
+          type: string
+          enum: [up, down, testing]
+
+    SnmpTestRequest:
+      type: object
+      required:
+        - ip_address
+      properties:
+        ip_address:
+          type: string
+          format: ipv4
+        snmp_version:
+          type: string
+          enum: ['1', '2c', '3']
+          default: '2c'
+        snmp_port:
+          type: integer
+          default: 161
+        community:
+          type: string
+          default: public
+        username:
+          type: string
+        security_level:
+          type: string
+        auth_protocol:
+          type: string
+        auth_password:
+          type: string
+        priv_protocol:
+          type: string
+        priv_password:
+          type: string
+
+    SnmpTestResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            success:
+              type: boolean
+            responseTimeMs:
+              type: integer
+            sysDescr:
+              type: string
+            sysName:
+              type: string
+            sysUpTime:
+              type: integer
+            uptimeFormatted:
+              type: string
+            detectedVendor:
+              type: string
+            detectedType:
+              type: string
+            error:
+              type: string
+
+    MetricResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            deviceId:
+              type: integer
+            deviceName:
+              type: string
+            period:
+              type: string
+            interval:
+              type: string
+            startDate:
+              type: string
+              format: date-time
+            endDate:
+              type: string
+              format: date-time
+            metrics:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    timestamp:
+                      type: string
+                      format: date-time
+                    value:
+                      type: number
+                    avg:
+                      type: number
+                    min:
+                      type: number
+                    max:
+                      type: number
+
+    Alarm:
+      type: object
+      properties:
+        id:
+          type: integer
+        device_id:
+          type: integer
+        interface_id:
+          type: integer
+        rule_id:
+          type: integer
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        status:
+          type: string
+          enum: [active, acknowledged, resolved]
+        title:
+          type: string
+        message:
+          type: string
+        metric_type:
+          type: string
+        current_value:
+          type: number
+        threshold_value:
+          type: number
+        occurrence_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        device:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            ip_address:
+              type: string
+
+    AlarmDetail:
+      allOf:
+        - $ref: '#/components/schemas/Alarm'
+        - type: object
+          properties:
+            acknowledged_at:
+              type: string
+              format: date-time
+            acknowledged_by:
+              type: integer
+            acknowledgement_note:
+              type: string
+            resolved_at:
+              type: string
+              format: date-time
+            resolved_by:
+              type: integer
+            resolution_note:
+              type: string
+            acknowledgedByUser:
+              $ref: '#/components/schemas/User'
+            resolvedByUser:
+              $ref: '#/components/schemas/User'
+
+    AlarmRuleCreate:
+      type: object
+      required:
+        - name
+        - metric_type
+        - threshold_critical
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          example: CPU 높은 사용률 경고
+        description:
+          type: string
+          example: CPU 사용률이 임계값을 초과하면 알람 발생
+        metric_type:
+          type: string
+          enum: [cpu, memory, traffic_in, traffic_out, bandwidth_util, errors_in, errors_out]
+          example: cpu
+        condition_operator:
+          type: string
+          enum: [gt, gte, lt, lte, eq, neq]
+          default: gt
+          description: "gt: >, gte: >=, lt: <, lte: <=, eq: =, neq: !="
+        threshold_warning:
+          type: number
+          example: 70
+          description: 경고 임계값
+        threshold_critical:
+          type: number
+          example: 90
+          description: 긴급 임계값
+        duration_seconds:
+          type: integer
+          default: 0
+          description: 조건 지속 시간 (초)
+        cooldown_seconds:
+          type: integer
+          default: 300
+          description: 알람 재발생 방지 시간 (초)
+        device_filter:
+          type: object
+          description: 적용 대상 장비 필터
+
+    AlarmRuleUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        threshold_warning:
+          type: number
+        threshold_critical:
+          type: number
+        duration_seconds:
+          type: integer
+        cooldown_seconds:
+          type: integer
+        is_enabled:
+          type: boolean
+
+    AIAnalysisResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            deviceId:
+              type: integer
+            deviceName:
+              type: string
+            cached:
+              type: boolean
+              description: 캐시된 결과 여부
+            result:
+              type: object
+              description: AI 분석 결과 (JSON 형식)
+            analysisId:
+              type: integer
+            tokensUsed:
+              type: integer
+
+  responses:
+    BadRequest:
+      description: 잘못된 요청
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: Validation failed
+            message: 입력값 검증에 실패했습니다
+            details:
+              - field: email
+                message: 이메일 형식이 올바르지 않습니다
+
+    Unauthorized:
+      description: 인증 실패
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: Unauthorized
+            message: 인증이 필요합니다
+
+    Forbidden:
+      description: 권한 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: Forbidden
+            message: 이 리소스에 접근할 권한이 없습니다
+
+    NotFound:
+      description: 리소스를 찾을 수 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: Not Found
+            message: 요청한 리소스를 찾을 수 없습니다
+
+    Conflict:
+      description: 충돌 (중복 등)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: Conflict
+            message: 이미 존재하는 리소스입니다
+
+    TooManyRequests:
+      description: 요청 제한 초과
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: Too many requests
+            message: 너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요
