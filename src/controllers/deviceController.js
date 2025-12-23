@@ -44,7 +44,7 @@ const getDevices = async (req, res, next) => {
       include: [{
         model: InterfaceInfo,
         as: 'interfaces',
-        attributes: ['id', 'if_name', 'if_status', 'if_speed'],
+        attributes: ['id', 'if_name', 'if_oper_status', 'if_speed'],
       }],
       order: [[sortField, order]],
       limit: parseInt(limit),
@@ -172,11 +172,11 @@ const createDevice = async (req, res, next) => {
       credentialData.username = username;
       credentialData.security_level = security_level;
       credentialData.auth_protocol = auth_protocol;
-      credentialData.auth_password_encrypted = auth_password; // Model hook에서 암호화 처리
+      credentialData.auth_password = auth_password;
       credentialData.priv_protocol = priv_protocol;
-      credentialData.priv_password_encrypted = priv_password;
+      credentialData.priv_password = priv_password;
     } else {
-      credentialData.community_encrypted = community || 'public';
+      credentialData.community_string = community || 'public';
     }
 
     await SnmpCredential.create(credentialData, { transaction });
@@ -185,11 +185,55 @@ const createDevice = async (req, res, next) => {
 
     logger.info(`Device created: ${name} (${ip_address})`, { deviceId: device.id });
 
+    // 자동 연결 테스트 수행
+    let connectionTest = null;
+    try {
+      const testDevice = {
+        ip_address,
+        snmp_version,
+        snmp_port,
+      };
+
+      const testCredentials = {
+        communityString: community,
+        username,
+        security_level,
+        auth_protocol,
+        auth_password,
+        priv_protocol,
+        priv_password,
+      };
+
+      connectionTest = await snmpService.testConnection(testDevice, testCredentials);
+
+      // 연결 성공 시 장비 상태 업데이트
+      if (connectionTest.success) {
+        await device.update({
+          status: 'up',
+          sys_descr: connectionTest.sysDescr,
+          sys_name: connectionTest.sysName,
+          sys_uptime: connectionTest.sysUpTime,
+          last_poll_time: new Date(),
+        });
+      }
+    } catch (testError) {
+      logger.warn(`Connection test failed for device ${name}: ${testError.message}`);
+      connectionTest = {
+        success: false,
+        error: testError.message,
+      };
+    }
+
+    const message = connectionTest?.success 
+      ? '장비가 성공적으로 등록되었습니다. SNMP 연결 테스트 성공.'
+      : `장비가 등록되었습니다. SNMP 연결 테스트 실패: ${connectionTest?.error || 'Unknown error'}`;
+
     res.status(201).json({
       success: true,
-      message: '장비가 성공적으로 등록되었습니다.',
+      message,
       data: {
         device: device.toJSON(),
+        connectionTest,
       },
     });
   } catch (error) {
@@ -337,9 +381,9 @@ const testConnection = async (req, res, next) => {
         username,
         security_level,
         auth_protocol,
-        authPassword: auth_password,
+        auth_password,
         priv_protocol,
-        privPassword: priv_password,
+        priv_password,
       };
     }
 
@@ -401,7 +445,7 @@ const getDeviceInterfaces = async (req, res, next) => {
 
     const where = { device_id: id };
     if (status) {
-      where.if_status = status;
+      where.if_oper_status = status;
     }
 
     const interfaces = await InterfaceInfo.findAll({
@@ -524,7 +568,7 @@ const pollDevice = async (req, res, next) => {
       throw ApiError.notFound('장비를 찾을 수 없습니다.');
     }
 
-    const result = await snmpService.pollDevice(id);
+    const result = await snmpService.collectMetrics(id);
 
     res.json({
       success: true,

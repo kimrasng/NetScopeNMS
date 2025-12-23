@@ -53,17 +53,19 @@ const createV1V2Options = (device, credentials) => {
 const createV3User = (credentials) => {
   const user = {
     name: credentials.username,
-    level: securityLevelMap[credentials.security_level] || snmp.SecurityLevel.noAuthNoPriv,
+    level: securityLevelMap[credentials.security_level || credentials.securityLevel] || snmp.SecurityLevel.noAuthNoPriv,
   };
 
-  if (credentials.security_level !== 'noAuthNoPriv') {
-    user.authProtocol = authProtocolMap[credentials.auth_protocol] || snmp.AuthProtocols.sha;
-    user.authKey = credentials.auth_password;
+  const secLevel = credentials.security_level || credentials.securityLevel;
+
+  if (secLevel !== 'noAuthNoPriv') {
+    user.authProtocol = authProtocolMap[credentials.auth_protocol || credentials.authProtocol] || snmp.AuthProtocols.sha;
+    user.authKey = credentials.auth_password || credentials.authPassword;
   }
 
-  if (credentials.security_level === 'authPriv') {
-    user.privProtocol = privProtocolMap[credentials.priv_protocol] || snmp.PrivProtocols.aes;
-    user.privKey = credentials.priv_password;
+  if (secLevel === 'authPriv') {
+    user.privProtocol = privProtocolMap[credentials.priv_protocol || credentials.privProtocol] || snmp.PrivProtocols.aes;
+    user.privKey = credentials.priv_password || credentials.privPassword;
   }
 
   return user;

@@ -58,16 +58,15 @@ const limiter = rateLimit({
 app.use(API_PREFIX, limiter);
 
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15분
-  max: 10, // 로그인 시도 제한
+  windowMs: 1 * 60 * 1000,
+  max: 100,
   message: {
     success: false,
     error: 'Too many login attempts',
-    message: '로그인 시도가 너무 많습니다. 15분 후 다시 시도해주세요.',
+    message: '로그인 시도가 너무 많습니다. 1분 후 다시 시도해주세요.',
   },
 });
 app.use(`${API_PREFIX}/users/login`, authLimiter);
-app.use(`${API_PREFIX}/users/register`, authLimiter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

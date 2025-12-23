@@ -302,7 +302,7 @@ const getLatestMetrics = async (req, res, next) => {
 
     // 인터페이스별 최신 트래픽
     const interfaces = await InterfaceInfo.findAll({
-      where: { device_id: deviceId, if_status: 'up' },
+      where: { device_id: deviceId, if_oper_status: 'up' },
       attributes: ['id', 'if_name', 'if_speed'],
     });
 

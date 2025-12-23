@@ -78,128 +78,7 @@ router.patch('/bulk-acknowledge', authenticate, authorize('admin', 'user'), alar
  */
 router.patch('/bulk-resolve', authenticate, authorize('admin', 'user'), alarmController.bulkResolveAlarms);
 
-/**
- * @swagger
- * /alarms:
- *   get:
- *     summary: 알람 목록 조회
- *     tags: [Alarms]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *           enum: [active, acknowledged, resolved, all]
- *       - in: query
- *         name: severity
- *         schema:
- *           type: string
- *           enum: [info, warning, critical]
- *       - in: query
- *         name: deviceId
- *         schema:
- *           type: integer
- *       - in: query
- *         name: metricType
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: 알람 목록
- */
-router.get('/', authenticate, alarmValidation.list, alarmController.getAlarms);
-
-/**
- * @swagger
- * /alarms/{id}:
- *   get:
- *     summary: 알람 상세 조회
- *     tags: [Alarms]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: 알람 상세 정보
- *       404:
- *         description: 알람을 찾을 수 없음
- */
-router.get('/:id', authenticate, idParam, alarmController.getAlarmById);
-
-/**
- * @swagger
- * /alarms/{id}/acknowledge:
- *   patch:
- *     summary: 알람 확인 처리
- *     tags: [Alarms]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               note:
- *                 type: string
- *                 description: 확인 메모
- *     responses:
- *       200:
- *         description: 확인 처리 완료
- */
-router.patch('/:id/acknowledge', authenticate, authorize('admin', 'user'), idParam, alarmController.acknowledgeAlarm);
-
-/**
- * @swagger
- * /alarms/{id}/resolve:
- *   patch:
- *     summary: 알람 해결 처리
- *     tags: [Alarms]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               note:
- *                 type: string
- *                 description: 해결 메모
- *     responses:
- *       200:
- *         description: 해결 처리 완료
- */
-router.patch('/:id/resolve', authenticate, authorize('admin', 'user'), alarmValidation.resolve, alarmController.resolveAlarm);
-
-// ==================== 알람 규칙 관리 ====================
+// ==================== 알람 규칙 관리 (/:id 라우트보다 먼저 정의) ====================
 
 /**
  * @swagger
@@ -333,5 +212,128 @@ router.delete('/rules/:id', authenticate, authorize('admin'), idParam, alarmCont
  *         description: 토글 성공
  */
 router.patch('/rules/:id/toggle', authenticate, authorize('admin', 'user'), idParam, alarmController.toggleAlarmRule);
+
+// ==================== 알람 목록/상세 ====================
+
+/**
+ * @swagger
+ * /alarms:
+ *   get:
+ *     summary: 알람 목록 조회
+ *     tags: [Alarms]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [active, acknowledged, resolved, all]
+ *       - in: query
+ *         name: severity
+ *         schema:
+ *           type: string
+ *           enum: [info, warning, critical]
+ *       - in: query
+ *         name: deviceId
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: metricType
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: 알람 목록
+ */
+router.get('/', authenticate, alarmValidation.list, alarmController.getAlarms);
+
+/**
+ * @swagger
+ * /alarms/{id}:
+ *   get:
+ *     summary: 알람 상세 조회
+ *     tags: [Alarms]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: 알람 상세 정보
+ *       404:
+ *         description: 알람을 찾을 수 없음
+ */
+router.get('/:id', authenticate, idParam, alarmController.getAlarmById);
+
+/**
+ * @swagger
+ * /alarms/{id}/acknowledge:
+ *   patch:
+ *     summary: 알람 확인 처리
+ *     tags: [Alarms]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               note:
+ *                 type: string
+ *                 description: 확인 메모
+ *     responses:
+ *       200:
+ *         description: 확인 처리 완료
+ */
+router.patch('/:id/acknowledge', authenticate, authorize('admin', 'user'), idParam, alarmController.acknowledgeAlarm);
+
+/**
+ * @swagger
+ * /alarms/{id}/resolve:
+ *   patch:
+ *     summary: 알람 해결 처리
+ *     tags: [Alarms]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               note:
+ *                 type: string
+ *                 description: 해결 메모
+ *     responses:
+ *       200:
+ *         description: 해결 처리 완료
+ */
+router.patch('/:id/resolve', authenticate, authorize('admin', 'user'), alarmValidation.resolve, alarmController.resolveAlarm);
 
 module.exports = router;

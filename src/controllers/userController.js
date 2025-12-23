@@ -41,9 +41,9 @@ const register = async (req, res, next) => {
     await AuditLog.create({
       user_id: user.id,
       action: 'USER_REGISTER',
-      resource_type: 'user',
-      resource_id: user.id,
-      details: { username, email, role: assignedRole },
+      entity_type: 'user',
+      entity_id: String(user.id),
+      new_values: { username, email, role: assignedRole },
     });
 
     res.status(201).json({
@@ -82,8 +82,8 @@ const login = async (req, res, next) => {
     await AuditLog.create({
       user_id: user.id,
       action: 'USER_LOGIN',
-      resource_type: 'user',
-      resource_id: user.id,
+      entity_type: 'user',
+      entity_id: String(user.id),
       ip_address: req.ip,
       user_agent: req.get('User-Agent'),
     });
@@ -202,8 +202,8 @@ const changePassword = async (req, res, next) => {
     await AuditLog.create({
       user_id: userId,
       action: 'PASSWORD_CHANGE',
-      resource_type: 'user',
-      resource_id: userId,
+      entity_type: 'user',
+      entity_id: String(userId),
       ip_address: req.ip,
     });
 
@@ -228,8 +228,8 @@ const logout = async (req, res, next) => {
     await AuditLog.create({
       user_id: userId,
       action: 'USER_LOGOUT',
-      resource_type: 'user',
-      resource_id: userId,
+      entity_type: 'user',
+      entity_id: String(userId),
       ip_address: req.ip,
     });
 
@@ -371,9 +371,9 @@ const createUser = async (req, res, next) => {
     await AuditLog.create({
       user_id: adminId,
       action: 'ADMIN_CREATE_USER',
-      resource_type: 'user',
-      resource_id: user.id,
-      details: { username, email, role },
+      entity_type: 'user',
+      entity_id: String(user.id),
+      new_values: { username, email, role },
     });
 
     res.status(201).json({
@@ -440,9 +440,9 @@ const updateUser = async (req, res, next) => {
     await AuditLog.create({
       user_id: adminId,
       action: 'ADMIN_UPDATE_USER',
-      resource_type: 'user',
-      resource_id: parseInt(id),
-      details: updateData,
+      entity_type: 'user',
+      entity_id: String(id),
+      new_values: updateData,
     });
 
     res.json({
@@ -484,9 +484,9 @@ const deleteUser = async (req, res, next) => {
     await AuditLog.create({
       user_id: adminId,
       action: 'ADMIN_DELETE_USER',
-      resource_type: 'user',
-      resource_id: parseInt(id),
-      details: { username },
+      entity_type: 'user',
+      entity_id: String(id),
+      old_values: { username },
     });
 
     res.json({
@@ -561,8 +561,8 @@ const resetUserPassword = async (req, res, next) => {
     await AuditLog.create({
       user_id: adminId,
       action: 'ADMIN_RESET_PASSWORD',
-      resource_type: 'user',
-      resource_id: parseInt(id),
+      entity_type: 'user',
+      entity_id: String(id),
       ip_address: req.ip,
     });
 
