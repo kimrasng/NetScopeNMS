@@ -1,8 +1,3 @@
-/**
- * Alarm Service
- * Handles alarm creation, evaluation, and management
- */
-
 const logger = require('../utils/logger');
 const { Alarm, AlarmRule, Device, Metric } = require('../models');
 
@@ -12,11 +7,6 @@ class AlarmService {
     this.alarmStateCache = new Map();
   }
 
-  /**
-   * Evaluate metric against alarm rules
-   * @param {object} metric - Metric data
-   * @returns {Promise<Array>} - Triggered alarms
-   */
   async evaluateMetric(metric) {
     const { device_id, interface_id, metric_type, value } = metric;
     const triggeredAlarms = [];
@@ -87,11 +77,6 @@ class AlarmService {
     return triggeredAlarms;
   }
 
-  /**
-   * Create or update alarm (deduplication)
-   * @param {object} data - Alarm data
-   * @returns {Promise<object>} - Alarm instance
-   */
   async createOrUpdateAlarm(data) {
     const device = await Device.findByPk(data.device_id);
     const deviceName = device?.name || `Device ${data.device_id}`;

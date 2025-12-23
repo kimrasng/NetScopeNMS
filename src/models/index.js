@@ -1,8 +1,3 @@
-/**
- * Sequelize Models Index
- * Initialize and export all models with associations
- */
-
 const { sequelize, Sequelize } = require('../config/database');
 
 // Import models

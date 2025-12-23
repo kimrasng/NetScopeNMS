@@ -1,8 +1,3 @@
-/**
- * NetScopeNMS Backend Application
- * AI 기반 네트워크 관리 시스템
- */
-
 require('dotenv').config();
 
 const express = require('express');
@@ -22,14 +17,10 @@ const schedulerService = require('./services/schedulerService');
 
 const app = express();
 
-// ==================== 환경 변수 ====================
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const API_PREFIX = '/api/v1';
 
-// ==================== 보안 미들웨어 ====================
-
-// Helmet - 보안 헤더 설정
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -42,7 +33,6 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-// CORS 설정
 const corsOptions = {
   origin: process.env.CORS_ORIGIN 
     ? process.env.CORS_ORIGIN.split(',') 
@@ -54,7 +44,6 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Rate Limiting
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15분
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000, // 최대 요청 수
@@ -68,7 +57,6 @@ const limiter = rateLimit({
 });
 app.use(API_PREFIX, limiter);
 
-// 인증 엔드포인트 추가 제한
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15분
   max: 10, // 로그인 시도 제한
@@ -81,17 +69,12 @@ const authLimiter = rateLimit({
 app.use(`${API_PREFIX}/users/login`, authLimiter);
 app.use(`${API_PREFIX}/users/register`, authLimiter);
 
-// ==================== 기본 미들웨어 ====================
-
-// Body parser
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Request logging
 if (NODE_ENV === 'development') {
   app.use(morgan('dev'));
 } else {
-  // Production: 커스텀 포맷으로 Winston 로거 사용
   app.use(morgan('combined', {
     stream: {
       write: (message) => logger.http(message.trim()),
@@ -99,10 +82,7 @@ if (NODE_ENV === 'development') {
   }));
 }
 
-// Trust proxy (nginx, load balancer 뒤에서 실행 시)
 app.set('trust proxy', 1);
-
-// ==================== Swagger API 문서 ====================
 
 try {
   const swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
@@ -115,7 +95,6 @@ try {
 
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerOptions));
   
-  // Swagger JSON endpoint
   app.get('/api-docs.json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.send(swaggerDocument);
@@ -126,12 +105,8 @@ try {
   logger.warn('Swagger documentation not loaded:', error.message);
 }
 
-// ==================== API 라우트 ====================
-
-// API Routes
 app.use(API_PREFIX, routes);
 
-// Root endpoint
 app.get('/', (req, res) => {
   res.json({
     success: true,
@@ -144,35 +119,25 @@ app.get('/', (req, res) => {
   });
 });
 
-// ==================== 에러 핸들링 ====================
-
-// 404 Not Found
 app.use(notFoundHandler);
 
-// Global Error Handler
 app.use(errorHandler);
-
-// ==================== 서버 시작 ====================
 
 const startServer = async () => {
   try {
-    // 데이터베이스 연결
     await sequelize.authenticate();
     logger.info('✅ Database connection established successfully');
 
-    // 테이블 동기화 (개발 환경에서만 alter 사용)
     if (NODE_ENV === 'development') {
-      await sequelize.sync({ alter: false }); // alter: true 는 주의해서 사용
+      await sequelize.sync({ alter: false });
       logger.info('✅ Database models synchronized');
     }
 
-    // 스케줄러 시작 (프로덕션 또는 스케줄러 활성화 시)
     if (process.env.ENABLE_SCHEDULER === 'true') {
       schedulerService.startAll();
       logger.info('✅ Scheduler services started');
     }
 
-    // 서버 시작
     const server = app.listen(PORT, () => {
       logger.info(`
 ╔═══════════════════════════════════════════════════════╗
@@ -188,27 +153,23 @@ const startServer = async () => {
       `);
     });
 
-    // Graceful shutdown
     const gracefulShutdown = async (signal) => {
       logger.info(`${signal} received. Starting graceful shutdown...`);
       
       server.close(async () => {
         logger.info('HTTP server closed');
         
-        // 스케줄러 중지
         if (process.env.ENABLE_SCHEDULER === 'true') {
           schedulerService.stopAll();
           logger.info('Scheduler services stopped');
         }
         
-        // 데이터베이스 연결 종료
         await sequelize.close();
         logger.info('Database connection closed');
         
         process.exit(0);
       });
 
-      // 강제 종료 타임아웃 (30초)
       setTimeout(() => {
         logger.error('Forced shutdown due to timeout');
         process.exit(1);
@@ -218,7 +179,6 @@ const startServer = async () => {
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-    // Uncaught exception handler
     process.on('uncaughtException', (error) => {
       logger.error('Uncaught Exception:', error);
       process.exit(1);
@@ -234,7 +194,6 @@ const startServer = async () => {
   }
 };
 
-// 서버 시작
 startServer();
 
 module.exports = app;

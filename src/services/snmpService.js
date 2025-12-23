@@ -1,8 +1,3 @@
-/**
- * SNMP Service
- * Handles all SNMP operations
- */
-
 const snmp = require('net-snmp');
 const logger = require('../utils/logger');
 const snmpConfig = require('../config/snmp');
@@ -16,12 +11,6 @@ class SNMPService {
     this.previousValues = new Map(); // Store previous counter values for rate calculation
   }
 
-  /**
-   * Create SNMP session for a device
-   * @param {object} device - Device model instance
-   * @param {object} credentials - SNMP credentials
-   * @returns {object} - SNMP session
-   */
   createSession(device, credentials) {
     const target = device.ip_address;
     const version = device.snmp_version;
@@ -46,10 +35,6 @@ class SNMPService {
     }
   }
 
-  /**
-   * Close SNMP session
-   * @param {object} session - SNMP session
-   */
   closeSession(session) {
     try {
       if (session) {
@@ -60,12 +45,6 @@ class SNMPService {
     }
   }
 
-  /**
-   * Get single OID value
-   * @param {object} session - SNMP session
-   * @param {string} oid - OID to query
-   * @returns {Promise<any>} - OID value
-   */
   get(session, oid) {
     return new Promise((resolve, reject) => {
       session.get([oid], (error, varbinds) => {
@@ -86,12 +65,6 @@ class SNMPService {
     });
   }
 
-  /**
-   * Get multiple OID values
-   * @param {object} session - SNMP session
-   * @param {Array<string>} oids - OIDs to query
-   * @returns {Promise<object>} - OID values map
-   */
   getMultiple(session, oids) {
     return new Promise((resolve, reject) => {
       session.get(oids, (error, varbinds) => {

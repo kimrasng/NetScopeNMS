@@ -1,12 +1,3 @@
-/**
- * Prompt Builder
- * Builds prompts for OpenAI API requests
- */
-
-/**
- * Build system prompt for NMS AI assistant
- * @returns {string} - System prompt
- */
 const buildSystemPrompt = () => {
   return `당신은 네트워크 관리 시스템(NMS)의 AI 분석 엔진입니다.
 네트워크 장비의 메트릭 데이터를 분석하여 문제의 근본 원인을 파악하고, 
@@ -20,11 +11,6 @@ const buildSystemPrompt = () => {
 5. 불확실한 경우 그 점을 명시합니다`;
 };
 
-/**
- * Build prompt for alarm root cause analysis
- * @param {object} data - Alarm and metric data
- * @returns {string} - User prompt
- */
 const buildAlarmRCAPrompt = (data) => {
   const { alarm, device, recentMetrics, interfaces } = data;
 
@@ -82,11 +68,6 @@ const buildAlarmRCAPrompt = (data) => {
   return prompt;
 };
 
-/**
- * Build prompt for issue prediction
- * @param {object} data - Device and metric data
- * @returns {string} - User prompt
- */
 const buildPredictionPrompt = (data) => {
   const { device, statistics, trends, recentAlarms } = data;
 
@@ -149,11 +130,6 @@ const buildPredictionPrompt = (data) => {
   return prompt;
 };
 
-/**
- * Build prompt for daily report
- * @param {object} data - Summary data
- * @returns {string} - User prompt
- */
 const buildDailyReportPrompt = (data) => {
   const { date, deviceSummary, alarmSummary, topDevices, events } = data;
 
@@ -209,11 +185,6 @@ const buildDailyReportPrompt = (data) => {
   return prompt;
 };
 
-/**
- * Build prompt for anomaly detection
- * @param {object} data - Metric data with baseline
- * @returns {string} - User prompt
- */
 const buildAnomalyDetectionPrompt = (data) => {
   const { device, currentMetrics, baseline, deviations } = data;
 
@@ -255,11 +226,6 @@ const buildAnomalyDetectionPrompt = (data) => {
   return prompt;
 };
 
-/**
- * Helper: Group metrics by time
- * @param {Array} metrics - Metric array
- * @returns {object} - Grouped metrics
- */
 const groupMetricsByTime = (metrics) => {
   const grouped = {};
   
@@ -279,11 +245,6 @@ const groupMetricsByTime = (metrics) => {
   return grouped;
 };
 
-/**
- * Helper: Format traffic value
- * @param {number} value - Bytes per second
- * @returns {string} - Formatted value
- */
 const formatTraffic = (value) => {
   if (!value) return 'N/A';
   const mbps = value / 1000000;

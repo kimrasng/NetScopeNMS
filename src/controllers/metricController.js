@@ -1,16 +1,8 @@
-/**
- * Metric Controller
- * 메트릭 데이터 조회 API 핸들러
- */
-
 const { Metric, MetricHourly, MetricDaily, Device, InterfaceInfo, sequelize } = require('../models');
 const { ApiError } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
 const { Op } = require('sequelize');
 
-/**
- * 기간 문자열을 시작/종료 날짜로 변환
- */
 const parsePeriod = (period, from, to) => {
   const now = new Date();
   let startDate, endDate;
@@ -47,9 +39,6 @@ const parsePeriod = (period, from, to) => {
   return { startDate, endDate };
 };
 
-/**
- * 적절한 데이터 소스 결정 (raw/hourly/daily)
- */
 const determineDataSource = (interval, startDate, endDate) => {
   const durationHours = (endDate - startDate) / (1000 * 60 * 60);
 
@@ -64,10 +53,6 @@ const determineDataSource = (interval, startDate, endDate) => {
   return 'daily';
 };
 
-/**
- * 장비 메트릭 조회
- * GET /api/v1/metrics/devices/:deviceId
- */
 const getDeviceMetrics = async (req, res, next) => {
   try {
     const { deviceId } = req.params;

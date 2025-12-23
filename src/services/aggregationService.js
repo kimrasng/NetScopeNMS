@@ -1,19 +1,8 @@
-/**
- * Aggregation Service
- * Handles metric data aggregation (hourly, daily)
- */
-
 const { Op } = require('sequelize');
 const logger = require('../utils/logger');
 const { sequelize, Metric, MetricHourly, MetricDaily } = require('../models');
 
 class AggregationService {
-  /**
-   * Aggregate raw metrics to hourly
-   * @param {Date} hourStart - Start of hour (inclusive)
-   * @param {Date} hourEnd - End of hour (exclusive)
-   * @returns {Promise<number>} - Number of aggregations created
-   */
   async aggregateToHourly(hourStart, hourEnd) {
     logger.info(`Aggregating metrics for hour: ${hourStart.toISOString()}`);
 
@@ -48,12 +37,6 @@ class AggregationService {
     }
   }
 
-  /**
-   * Aggregate hourly metrics to daily
-   * @param {Date} dayStart - Start of day (inclusive)
-   * @param {Date} dayEnd - End of day (exclusive)
-   * @returns {Promise<number>} - Number of aggregations created
-   */
   async aggregateToDaily(dayStart, dayEnd) {
     logger.info(`Aggregating metrics for day: ${dayStart.toISOString().split('T')[0]}`);
 
@@ -91,10 +74,6 @@ class AggregationService {
     }
   }
 
-  /**
-   * Aggregate last hour's data
-   * @returns {Promise<number>} - Number of aggregations
-   */
   async aggregateLastHour() {
     const now = new Date();
     const hourEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), 0, 0, 0);

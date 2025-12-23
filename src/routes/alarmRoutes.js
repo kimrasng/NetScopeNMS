@@ -1,8 +1,3 @@
-/**
- * Alarm Routes
- * 알람 및 알람 규칙 관리 API 라우트
- */
-
 const express = require('express');
 const router = express.Router();
 const alarmController = require('../controllers/alarmController');

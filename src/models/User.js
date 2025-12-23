@@ -1,7 +1,3 @@
-/**
- * User Model
- */
-
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 const bcrypt = require('bcrypt');
@@ -63,16 +59,10 @@ const User = sequelize.define('User', {
   },
 });
 
-/**
- * Instance Methods
- */
-
-// Verify password
 User.prototype.verifyPassword = async function(password) {
   return bcrypt.compare(password, this.password_hash);
 };
 
-// Get public profile (exclude sensitive data)
 User.prototype.toPublicJSON = function() {
   return {
     id: this.id,
@@ -85,11 +75,6 @@ User.prototype.toPublicJSON = function() {
   };
 };
 
-/**
- * Class Methods
- */
-
-// Find by credentials
 User.findByCredentials = async function(email, password) {
   const user = await this.findOne({ where: { email, is_active: true } });
   if (!user) return null;

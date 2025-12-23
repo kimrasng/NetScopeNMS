@@ -1,18 +1,9 @@
-/**
- * Alarm Controller
- * 알람 관리 및 알람 규칙 API 핸들러
- */
-
 const { Alarm, AlarmRule, Device, InterfaceInfo, User, sequelize } = require('../models');
 const alarmService = require('../services/alarmService');
 const { ApiError } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
 const { Op } = require('sequelize');
 
-/**
- * 알람 목록 조회
- * GET /api/v1/alarms
- */
 const getAlarms = async (req, res, next) => {
   try {
     const {

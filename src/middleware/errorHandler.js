@@ -1,13 +1,5 @@
-/**
- * Error Handler Middleware
- * Centralized error handling
- */
-
 const logger = require('../utils/logger');
 
-/**
- * Custom API Error class
- */
 class ApiError extends Error {
   constructor(statusCode, message, details = null) {
     super(message);
@@ -43,18 +35,11 @@ class ApiError extends Error {
   }
 }
 
-/**
- * Not found handler
- * Catches requests to undefined routes
- */
 const notFoundHandler = (req, res, next) => {
   const error = ApiError.notFound(`Cannot ${req.method} ${req.path}`);
   next(error);
 };
 
-/**
- * Global error handler
- */
 const errorHandler = (err, req, res, next) => {
   let statusCode = err.statusCode || 500;
   let message = err.message || 'Internal server error';
@@ -142,11 +127,6 @@ const errorHandler = (err, req, res, next) => {
   res.status(statusCode).json(response);
 };
 
-/**
- * Async handler wrapper
- * Catches async errors and passes to error handler
- * @param {Function} fn - Async route handler
- */
 const asyncHandler = (fn) => {
   return (req, res, next) => {
     Promise.resolve(fn(req, res, next)).catch(next);

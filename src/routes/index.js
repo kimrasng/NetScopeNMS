@@ -1,8 +1,3 @@
-/**
- * Routes Index
- * API 라우트 통합 및 버전 관리
- */
-
 const express = require('express');
 const router = express.Router();
 
@@ -13,10 +8,6 @@ const alarmRoutes = require('./alarmRoutes');
 const aiRoutes = require('./aiRoutes');
 const userRoutes = require('./userRoutes');
 
-/**
- * API Health Check
- * GET /api/v1/health
- */
 router.get('/health', (req, res) => {
   res.json({
     success: true,
@@ -26,19 +17,12 @@ router.get('/health', (req, res) => {
   });
 });
 
-/**
- * Mount routes
- */
 router.use('/devices', deviceRoutes);
 router.use('/metrics', metricRoutes);
 router.use('/alarms', alarmRoutes);
 router.use('/ai', aiRoutes);
 router.use('/users', userRoutes);
 
-/**
- * API Info
- * GET /api/v1/
- */
 router.get('/', (req, res) => {
   res.json({
     success: true,

@@ -1,8 +1,3 @@
-/**
- * AI Service
- * Handles all OpenAI API interactions
- */
-
 const logger = require('../utils/logger');
 const openaiConfig = require('../config/openai');
 const promptBuilder = require('../utils/promptBuilder');
@@ -14,11 +9,6 @@ const cache = new Map();
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 class AIService {
-  /**
-   * Analyze alarm and find root cause
-   * @param {number} alarmId - Alarm ID
-   * @returns {Promise<object>} - Analysis result
-   */
   async analyzeAlarm(alarmId) {
     const alarm = await Alarm.findByPk(alarmId, {
       include: ['device', 'interface'],
@@ -77,11 +67,6 @@ class AIService {
     return result;
   }
 
-  /**
-   * Predict issues for a device
-   * @param {number} deviceId - Device ID
-   * @returns {Promise<object>} - Prediction result
-   */
   async predictIssues(deviceId) {
     const device = await Device.findByPk(deviceId);
     if (!device) {

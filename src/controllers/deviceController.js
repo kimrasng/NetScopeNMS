@@ -1,18 +1,9 @@
-/**
- * Device Controller
- * 장비 관리 및 SNMP 관련 API 핸들러
- */
-
 const { Device, SnmpCredential, InterfaceInfo, sequelize } = require('../models');
 const snmpService = require('../services/snmpService');
 const { ApiError } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
 const { Op } = require('sequelize');
 
-/**
- * 장비 목록 조회
- * GET /api/v1/devices
- */
 const getDevices = async (req, res, next) => {
   try {
     const { 
@@ -81,10 +72,6 @@ const getDevices = async (req, res, next) => {
   }
 };
 
-/**
- * 장비 상세 조회
- * GET /api/v1/devices/:id
- */
 const getDeviceById = async (req, res, next) => {
   try {
     const { id } = req.params;

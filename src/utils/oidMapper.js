@@ -1,9 +1,3 @@
-/**
- * OID Mapper
- * Maps SNMP OIDs by device vendor and type
- */
-
-// Standard MIB-2 OIDs
 const STANDARD_OIDS = {
   system: {
     sysDescr: '1.3.6.1.2.1.1.1.0',
@@ -61,7 +55,6 @@ const STANDARD_OIDS = {
   },
 };
 
-// Vendor-specific OIDs
 const VENDOR_OIDS = {
   cisco: {
     cpu: {
@@ -146,7 +139,6 @@ const VENDOR_OIDS = {
   },
 };
 
-// Vendor detection patterns
 const VENDOR_PATTERNS = [
   { pattern: /cisco/i, vendor: 'cisco', type: 'router' },
   { pattern: /ios/i, vendor: 'cisco', type: 'router' },
@@ -171,11 +163,6 @@ const VENDOR_PATTERNS = [
   { pattern: /ubiquiti|unifi/i, vendor: 'ubiquiti', type: 'access_point' },
 ];
 
-/**
- * Detect vendor from sysDescr
- * @param {string} sysDescr - System description from SNMP
- * @returns {object} - { vendor, type }
- */
 const detectVendor = (sysDescr) => {
   if (!sysDescr) {
     return { vendor: 'generic', type: 'other' };
@@ -190,40 +177,20 @@ const detectVendor = (sysDescr) => {
   return { vendor: 'generic', type: 'other' };
 };
 
-/**
- * Get OIDs for a specific vendor
- * @param {string} vendor - Vendor name
- * @returns {object} - OIDs for the vendor
- */
 const getVendorOids = (vendor) => {
   return VENDOR_OIDS[vendor] || VENDOR_OIDS.generic;
 };
 
-/**
- * Get CPU OIDs for a vendor
- * @param {string} vendor - Vendor name
- * @returns {object} - CPU OIDs
- */
 const getCpuOids = (vendor) => {
   const vendorOids = getVendorOids(vendor);
   return vendorOids.cpu || VENDOR_OIDS.generic.cpu;
 };
 
-/**
- * Get memory OIDs for a vendor
- * @param {string} vendor - Vendor name
- * @returns {object} - Memory OIDs
- */
 const getMemoryOids = (vendor) => {
   const vendorOids = getVendorOids(vendor);
   return vendorOids.memory || VENDOR_OIDS.generic.memory;
 };
 
-/**
- * Get interface OIDs (standard for all vendors)
- * @param {boolean} use64bit - Use 64-bit counters
- * @returns {object} - Interface OIDs
- */
 const getInterfaceOids = (use64bit = true) => {
   const base = STANDARD_OIDS.interfaces;
   const ext = STANDARD_OIDS.ifXTable;
@@ -247,22 +214,10 @@ const getInterfaceOids = (use64bit = true) => {
   };
 };
 
-/**
- * Build OID with interface index
- * @param {string} baseOid - Base OID
- * @param {number} ifIndex - Interface index
- * @returns {string} - Full OID
- */
 const buildInterfaceOid = (baseOid, ifIndex) => {
   return `${baseOid}.${ifIndex}`;
 };
 
-/**
- * Get all metric OIDs for a device
- * @param {string} vendor - Vendor name
- * @param {Array} interfaces - Interface list with ifIndex
- * @returns {object} - All OIDs to poll
- */
 const getAllMetricOids = (vendor, interfaces = []) => {
   const cpuOids = getCpuOids(vendor);
   const memoryOids = getMemoryOids(vendor);

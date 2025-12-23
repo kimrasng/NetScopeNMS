@@ -1,18 +1,9 @@
-/**
- * User Controller
- * 사용자 관리 및 인증 API 핸들러
- */
-
 const { User, AuditLog, sequelize } = require('../models');
 const { generateToken } = require('../middleware/auth');
 const { ApiError } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
 const { Op } = require('sequelize');
 
-/**
- * 회원가입
- * POST /api/v1/users/register
- */
 const register = async (req, res, next) => {
   try {
     const { username, email, password, role = 'viewer' } = req.body;
@@ -68,10 +59,6 @@ const register = async (req, res, next) => {
   }
 };
 
-/**
- * 로그인
- * POST /api/v1/users/login
- */
 const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;

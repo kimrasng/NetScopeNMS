@@ -1,8 +1,3 @@
-/**
- * OpenAI Configuration
- * OpenAI API client setup
- */
-
 const OpenAI = require('openai');
 const logger = require('../utils/logger');
 
@@ -19,9 +14,6 @@ const config = {
 // OpenAI client instance
 let client = null;
 
-/**
- * Get or create OpenAI client
- */
 const getClient = () => {
   if (!client) {
     if (!config.apiKey) {
@@ -37,20 +29,10 @@ const getClient = () => {
   return client;
 };
 
-/**
- * Check if OpenAI is configured
- */
 const isConfigured = () => {
   return !!config.apiKey && config.apiKey !== 'sk-your_api_key_here';
 };
 
-/**
- * Make a chat completion request
- * @param {string} systemPrompt - System prompt
- * @param {string} userPrompt - User prompt
- * @param {object} options - Additional options
- * @returns {Promise<object>} - OpenAI response
- */
 const createCompletion = async (systemPrompt, userPrompt, options = {}) => {
   const openai = getClient();
   if (!openai) {
@@ -102,11 +84,6 @@ const createCompletion = async (systemPrompt, userPrompt, options = {}) => {
   }
 };
 
-/**
- * Parse JSON response from OpenAI
- * @param {string} content - Response content
- * @returns {object|null} - Parsed JSON or null
- */
 const parseJsonResponse = (content) => {
   if (!content) return null;
 

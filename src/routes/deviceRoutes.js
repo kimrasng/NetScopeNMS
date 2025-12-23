@@ -1,8 +1,3 @@
-/**
- * Device Routes
- * 장비 관리 API 라우트
- */
-
 const express = require('express');
 const router = express.Router();
 const deviceController = require('../controllers/deviceController');

@@ -1,8 +1,3 @@
-/**
- * AI Routes
- * AI 분석 및 예측 API 라우트
- */
-
 const express = require('express');
 const router = express.Router();
 const aiController = require('../controllers/aiController');

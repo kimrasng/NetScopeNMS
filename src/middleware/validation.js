@@ -1,15 +1,6 @@
-/**
- * Validation Middleware
- * Request validation using express-validator
- */
-
 const { body, param, query, validationResult } = require('express-validator');
 const { ApiError } = require('./errorHandler');
 
-/**
- * Validation result handler
- * Checks for validation errors and throws ApiError if found
- */
 const validate = (req, res, next) => {
   const errors = validationResult(req);
   
@@ -26,9 +17,6 @@ const validate = (req, res, next) => {
   next();
 };
 
-/**
- * Device validation rules
- */
 const deviceValidation = {
   create: [
     body('name')
@@ -83,9 +71,6 @@ const deviceValidation = {
   ],
 };
 
-/**
- * SNMP credential validation rules
- */
 const snmpCredentialValidation = {
   v1v2c: [
     body('community')
@@ -124,9 +109,6 @@ const snmpCredentialValidation = {
   ],
 };
 
-/**
- * Metric query validation rules
- */
 const metricValidation = {
   query: [
     param('deviceId').isInt().withMessage('Invalid device ID'),
@@ -156,9 +138,6 @@ const metricValidation = {
   ],
 };
 
-/**
- * Alarm validation rules
- */
 const alarmValidation = {
   list: [
     query('status')
@@ -190,9 +169,6 @@ const alarmValidation = {
   ],
 };
 
-/**
- * Alarm rule validation
- */
 const alarmRuleValidation = {
   create: [
     body('name')
@@ -232,9 +208,6 @@ const alarmRuleValidation = {
   ],
 };
 
-/**
- * User validation rules
- */
 const userValidation = {
   register: [
     body('username')
@@ -294,9 +267,6 @@ const userValidation = {
   ],
 };
 
-/**
- * AI validation rules
- */
 const aiValidation = {
   analyze: [
     param('deviceId').isInt().withMessage('Invalid device ID'),
@@ -320,17 +290,11 @@ const aiValidation = {
   ],
 };
 
-/**
- * Common ID parameter validation
- */
 const idParam = [
   param('id').isInt({ min: 1 }).withMessage('Invalid ID'),
   validate,
 ];
 
-/**
- * Pagination validation
- */
 const pagination = [
   query('page')
     .optional()

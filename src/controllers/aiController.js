@@ -1,18 +1,9 @@
-/**
- * AI Controller
- * AI 분석 및 예측 API 핸들러
- */
-
 const { AIAnalysis, Device, Alarm, sequelize } = require('../models');
 const aiService = require('../services/aiService');
 const { ApiError } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
 const { Op } = require('sequelize');
 
-/**
- * 장비 AI 분석 요청
- * POST /api/v1/ai/devices/:deviceId/analyze
- */
 const analyzeDevice = async (req, res, next) => {
   try {
     const { deviceId } = req.params;
@@ -46,10 +37,6 @@ const analyzeDevice = async (req, res, next) => {
   }
 };
 
-/**
- * 알람 근본 원인 분석
- * POST /api/v1/ai/alarms/:alarmId/analyze
- */
 const analyzeAlarm = async (req, res, next) => {
   try {
     const { alarmId } = req.params;
@@ -89,10 +76,6 @@ const analyzeAlarm = async (req, res, next) => {
   }
 };
 
-/**
- * 장비 예측 분석
- * POST /api/v1/ai/devices/:deviceId/predict
- */
 const predictDevice = async (req, res, next) => {
   try {
     const { deviceId } = req.params;

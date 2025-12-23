@@ -1,57 +1,9 @@
-/**
- * User Routes
- * 사용자 관리 및 인증 API 라우트
- */
-
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
 const { authenticate, adminOnly, authorize } = require('../middleware/auth');
 const { userValidation, idParam } = require('../middleware/validation');
 
-// ==================== 인증 (Public) ====================
-
-/**
- * @swagger
- * /users/register:
- *   post:
- *     summary: 회원가입
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - username
- *               - email
- *               - password
- *             properties:
- *               username:
- *                 type: string
- *                 minLength: 3
- *                 maxLength: 50
- *                 pattern: ^[a-zA-Z0-9_]+$
- *                 description: 사용자명 (영문, 숫자, 밑줄만 허용)
- *               email:
- *                 type: string
- *                 format: email
- *                 description: 이메일 주소
- *               password:
- *                 type: string
- *                 minLength: 8
- *                 description: 비밀번호 (대/소문자, 숫자 포함)
- *               role:
- *                 type: string
- *                 enum: [admin, user, viewer]
- *                 default: viewer
- *     responses:
- *       201:
- *         description: 회원가입 성공
- *       409:
- *         description: 이메일 또는 사용자명 중복
- */
 router.post('/register', userValidation.register, userController.register);
 
 /**

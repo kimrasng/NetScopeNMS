@@ -1,8 +1,3 @@
-/**
- * Metric Routes
- * 메트릭 데이터 조회 API 라우트
- */
-
 const express = require('express');
 const router = express.Router();
 const metricController = require('../controllers/metricController');

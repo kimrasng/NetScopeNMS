@@ -1,8 +1,3 @@
-/**
- * Scheduler Service
- * Handles all scheduled tasks using node-cron
- */
-
 const cron = require('node-cron');
 const logger = require('../utils/logger');
 const snmpService = require('./snmpService');
@@ -17,9 +12,6 @@ class SchedulerService {
     this.pollingQueue = [];
   }
 
-  /**
-   * Start all schedulers
-   */
   startAll() {
     logger.info('Starting all schedulers...');
     
@@ -31,9 +23,6 @@ class SchedulerService {
     logger.info('All schedulers started');
   }
 
-  /**
-   * Stop all schedulers
-   */
   stopAll() {
     logger.info('Stopping all schedulers...');
     
@@ -46,9 +35,6 @@ class SchedulerService {
     logger.info('All schedulers stopped');
   }
 
-  /**
-   * Start device polling scheduler (every minute)
-   */
   startPollingScheduler() {
     const job = cron.schedule('* * * * *', async () => {
       await this.pollDevices();
@@ -61,9 +47,6 @@ class SchedulerService {
     logger.info('Polling scheduler started (every minute)');
   }
 
-  /**
-   * Poll all devices that need polling
-   */
   async pollDevices() {
     if (this.isPolling) {
       logger.debug('Previous polling still in progress, skipping...');

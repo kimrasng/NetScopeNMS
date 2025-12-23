@@ -1,8 +1,3 @@
-/**
- * Database Configuration
- * MySQL connection using Sequelize ORM
- */
-
 const { Sequelize } = require('sequelize');
 const logger = require('../utils/logger');
 
@@ -41,9 +36,6 @@ const sequelize = new Sequelize(config.database, config.username, config.passwor
   },
 });
 
-/**
- * Test database connection
- */
 const testConnection = async () => {
   try {
     await sequelize.authenticate();
@@ -55,10 +47,6 @@ const testConnection = async () => {
   }
 };
 
-/**
- * Sync database models
- * @param {boolean} force - Drop and recreate tables
- */
 const syncDatabase = async (force = false) => {
   try {
     await sequelize.sync({ force });
@@ -69,9 +57,6 @@ const syncDatabase = async (force = false) => {
   }
 };
 
-/**
- * Close database connection
- */
 const closeConnection = async () => {
   try {
     await sequelize.close();

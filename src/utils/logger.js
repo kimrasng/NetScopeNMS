@@ -1,8 +1,3 @@
-/**
- * Logger Configuration
- * Winston logger setup
- */
-
 const winston = require('winston');
 const path = require('path');
 

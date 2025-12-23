@@ -1,14 +1,3 @@
-/**
- * Unit Converter
- * Converts SNMP values to human-readable units
- */
-
-/**
- * Convert bytes to human-readable format
- * @param {number} bytes - Bytes value
- * @param {number} decimals - Decimal places
- * @returns {string} - Formatted string (e.g., "1.5 GB")
- */
 const formatBytes = (bytes, decimals = 2) => {
   if (bytes === 0) return '0 Bytes';
   if (!bytes || isNaN(bytes)) return 'N/A';
@@ -20,12 +9,6 @@ const formatBytes = (bytes, decimals = 2) => {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(decimals))} ${sizes[i]}`;
 };
 
-/**
- * Convert bits per second to human-readable format
- * @param {number} bps - Bits per second
- * @param {number} decimals - Decimal places
- * @returns {string} - Formatted string (e.g., "100 Mbps")
- */
 const formatBps = (bps, decimals = 2) => {
   if (bps === 0) return '0 bps';
   if (!bps || isNaN(bps)) return 'N/A';
@@ -37,13 +20,6 @@ const formatBps = (bps, decimals = 2) => {
   return `${parseFloat((bps / Math.pow(k, i)).toFixed(decimals))} ${sizes[i]}`;
 };
 
-/**
- * Convert octets difference to bits per second
- * @param {number} octets1 - First octets value
- * @param {number} octets2 - Second octets value
- * @param {number} intervalSeconds - Time interval in seconds
- * @returns {number} - Bits per second
- */
 const octetsToBps = (octets1, octets2, intervalSeconds) => {
   if (intervalSeconds <= 0) return 0;
   
@@ -66,23 +42,12 @@ const octetsToBps = (octets1, octets2, intervalSeconds) => {
   return (diff * 8) / intervalSeconds;
 };
 
-/**
- * Calculate bandwidth utilization percentage
- * @param {number} bps - Current bits per second
- * @param {number} maxBps - Maximum interface speed in bps
- * @returns {number} - Percentage (0-100)
- */
 const calculateBandwidthUtil = (bps, maxBps) => {
   if (!maxBps || maxBps <= 0) return 0;
   const util = (bps / maxBps) * 100;
   return Math.min(100, Math.max(0, util));
 };
 
-/**
- * Format uptime from timeticks
- * @param {number} timeticks - SNMP timeticks (hundredths of second)
- * @returns {string} - Formatted uptime string
- */
 const formatUptime = (timeticks) => {
   if (!timeticks || isNaN(timeticks)) return 'Unknown';
   
@@ -101,35 +66,16 @@ const formatUptime = (timeticks) => {
   return parts.join(' ');
 };
 
-/**
- * Convert timeticks to seconds
- * @param {number} timeticks - SNMP timeticks
- * @returns {number} - Seconds
- */
 const timeticksToSeconds = (timeticks) => {
   return Math.floor(timeticks / 100);
 };
 
-/**
- * Calculate memory usage percentage
- * @param {number} used - Used memory
- * @param {number} total - Total memory
- * @returns {number} - Percentage (0-100)
- */
 const calculateMemoryPercent = (used, total) => {
   if (!total || total <= 0) return 0;
   const percent = (used / total) * 100;
   return Math.min(100, Math.max(0, percent));
 };
 
-/**
- * Calculate Linux memory usage (considering buffers/cache)
- * @param {number} total - Total memory
- * @param {number} available - Available memory
- * @param {number} buffers - Buffer memory
- * @param {number} cached - Cached memory
- * @returns {number} - Used memory percentage
- */
 const calculateLinuxMemory = (total, available, buffers = 0, cached = 0) => {
   if (!total || total <= 0) return 0;
   
@@ -143,11 +89,6 @@ const calculateLinuxMemory = (total, available, buffers = 0, cached = 0) => {
   return calculateMemoryPercent(total - effectiveAvailable, total);
 };
 
-/**
- * Parse MAC address from SNMP octet string
- * @param {Buffer|string} value - SNMP value
- * @returns {string} - Formatted MAC address
- */
 const parseMacAddress = (value) => {
   if (!value) return null;
   
@@ -169,11 +110,6 @@ const parseMacAddress = (value) => {
     .toUpperCase();
 };
 
-/**
- * Convert interface admin/oper status number to string
- * @param {number} status - Status number
- * @returns {string} - Status string
- */
 const parseIfStatus = (status) => {
   const statusMap = {
     1: 'up',
@@ -187,23 +123,11 @@ const parseIfStatus = (status) => {
   return statusMap[status] || 'unknown';
 };
 
-/**
- * Format percentage value
- * @param {number} value - Percentage value
- * @param {number} decimals - Decimal places
- * @returns {string} - Formatted string (e.g., "75.5%")
- */
 const formatPercent = (value, decimals = 1) => {
   if (value === null || value === undefined || isNaN(value)) return 'N/A';
   return `${parseFloat(value).toFixed(decimals)}%`;
 };
 
-/**
- * Round to specified decimal places
- * @param {number} value - Value to round
- * @param {number} decimals - Decimal places
- * @returns {number} - Rounded value
- */
 const roundTo = (value, decimals = 2) => {
   if (value === null || value === undefined || isNaN(value)) return 0;
   return Number(Math.round(value + 'e' + decimals) + 'e-' + decimals);

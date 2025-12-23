@@ -1,8 +1,3 @@
-/**
- * SNMP Configuration
- * net-snmp library settings and defaults
- */
-
 const snmp = require('net-snmp');
 
 // Default SNMP settings
@@ -46,9 +41,6 @@ const privProtocolMap = {
   'AES-256': snmp.PrivProtocols.aes256,
 };
 
-/**
- * Create SNMPv1/v2c session options
- */
 const createV1V2Options = (device, credentials) => {
   return {
     port: device.snmp_port || defaults.port,
@@ -58,9 +50,6 @@ const createV1V2Options = (device, credentials) => {
   };
 };
 
-/**
- * Create SNMPv3 user object
- */
 const createV3User = (credentials) => {
   const user = {
     name: credentials.username,
@@ -80,9 +69,6 @@ const createV3User = (credentials) => {
   return user;
 };
 
-/**
- * Create SNMPv3 session options
- */
 const createV3Options = (device, credentials) => {
   return {
     port: device.snmp_port || defaults.port,
