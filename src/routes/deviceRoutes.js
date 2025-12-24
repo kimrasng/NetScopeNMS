@@ -276,4 +276,122 @@ router.patch('/:id/toggle', authenticate, authorize('admin', 'user'), deviceVali
  */
 router.post('/:id/poll', authenticate, authorize('admin', 'user'), deviceValidation.getById, deviceController.pollDevice);
 
+/**
+ * @swagger
+ * /devices/{id}/mac-table:
+ *   get:
+ *     summary: MAC 주소 테이블 조회 (스위치/L2 장비)
+ *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 장비 ID
+ *       - in: query
+ *         name: vlan
+ *         schema:
+ *           type: integer
+ *         description: VLAN ID 필터
+ *       - in: query
+ *         name: port
+ *         schema:
+ *           type: integer
+ *         description: 포트 번호 필터
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: MAC 주소 검색
+ *     responses:
+ *       200:
+ *         description: MAC 주소 테이블
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     count:
+ *                       type: integer
+ *                     macTable:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           mac_address:
+ *                             type: string
+ *                           port:
+ *                             type: integer
+ *                           vlan_id:
+ *                             type: integer
+ *                           status:
+ *                             type: string
+ */
+router.get('/:id/mac-table', authenticate, deviceValidation.getById, deviceController.getMacTable);
+
+/**
+ * @swagger
+ * /devices/{id}/arp-table:
+ *   get:
+ *     summary: ARP 테이블 조회 (IP-MAC 매핑)
+ *     tags: [Devices]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: 장비 ID
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *           enum: [dynamic, static, other, invalid]
+ *         description: ARP 엔트리 타입 필터
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: IP 또는 MAC 주소 검색
+ *     responses:
+ *       200:
+ *         description: ARP 테이블
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     count:
+ *                       type: integer
+ *                     arpTable:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           ip_address:
+ *                             type: string
+ *                           mac_address:
+ *                             type: string
+ *                           if_index:
+ *                             type: integer
+ *                           type:
+ *                             type: string
+ */
+router.get('/:id/arp-table', authenticate, deviceValidation.getById, deviceController.getArpTable);
+
 module.exports = router;

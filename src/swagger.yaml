@@ -29,8 +29,8 @@ info:
     
   version: 1.0.0
   contact:
-    name: NetScopeNMS Team
-    email: support@netscopenms.dev
+    name: Dohyun Kim
+    email: me@kimrasng.kr
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
@@ -38,8 +38,6 @@ info:
 servers:
   - url: http://localhost:3000/api/v1
     description: Development server
-  - url: https://api.netscopenms.com/api/v1
-    description: Production server
 
 tags:
   - name: Authentication
@@ -588,6 +586,169 @@ paths:
       responses:
         '200':
           description: 폴링 결과
+
+  /devices/{id}/mac-table:
+    get:
+      tags:
+        - Devices
+      summary: MAC 주소 테이블 조회
+      description: |
+        스위치의 MAC 주소 테이블(FDB - Forwarding Database)을 조회합니다.
+        BRIDGE-MIB 또는 Q-BRIDGE-MIB를 통해 데이터를 수집합니다.
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - name: vlan
+          in: query
+          schema:
+            type: integer
+          description: VLAN ID로 필터링
+          example: 100
+        - name: port
+          in: query
+          schema:
+            type: integer
+          description: 포트 번호로 필터링
+          example: 15
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: MAC 주소 검색 (부분 일치)
+          example: "2C:CF:67"
+      responses:
+        '200':
+          description: MAC 주소 테이블
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "MAC 주소 테이블을 조회했습니다. (16개 항목)"
+                  data:
+                    type: object
+                    properties:
+                      deviceId:
+                        type: integer
+                        example: 2
+                      deviceName:
+                        type: string
+                        example: "Cisco-Switch"
+                      count:
+                        type: integer
+                        example: 16
+                      macTable:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            mac_address:
+                              type: string
+                              example: "2C:CF:67:3D:45:8F"
+                            port:
+                              type: integer
+                              example: 15
+                              description: Q-BRIDGE 포트 번호
+                            bridge_port:
+                              type: integer
+                              example: 15
+                              description: BRIDGE-MIB 포트 번호
+                            if_index:
+                              type: integer
+                              example: 10115
+                              description: 인터페이스 인덱스
+                            vlan_id:
+                              type: integer
+                              example: 1
+                              description: VLAN ID (Q-BRIDGE에서만)
+                            status:
+                              type: string
+                              enum: [other, invalid, learned, self, mgmt, unknown]
+                              example: "learned"
+                            type:
+                              type: string
+                              example: "dynamic"
+        '400':
+          description: SNMP 자격증명 없음
+        '404':
+          description: 장비를 찾을 수 없음
+
+  /devices/{id}/arp-table:
+    get:
+      tags:
+        - Devices
+      summary: ARP 테이블 조회
+      description: |
+        장비의 ARP 테이블(IP-MAC 매핑)을 조회합니다.
+        IP-MIB의 ipNetToMediaTable을 통해 데이터를 수집합니다.
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [dynamic, static, other, invalid]
+          description: ARP 엔트리 타입으로 필터링
+          example: "dynamic"
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: IP 또는 MAC 주소 검색 (부분 일치)
+          example: "192.168.1"
+      responses:
+        '200':
+          description: ARP 테이블
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "ARP 테이블을 조회했습니다. (25개 항목)"
+                  data:
+                    type: object
+                    properties:
+                      deviceId:
+                        type: integer
+                        example: 2
+                      deviceName:
+                        type: string
+                        example: "Cisco-Switch"
+                      count:
+                        type: integer
+                        example: 25
+                      arpTable:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            ip_address:
+                              type: string
+                              example: "192.168.1.100"
+                            mac_address:
+                              type: string
+                              example: "2C:CF:67:3D:45:8F"
+                            if_index:
+                              type: integer
+                              example: 10115
+                              description: 인터페이스 인덱스
+                            type:
+                              type: string
+                              enum: [dynamic, static, other, invalid, unknown]
+                              example: "dynamic"
+        '400':
+          description: SNMP 자격증명 없음
+        '404':
+          description: 장비를 찾을 수 없음
 
   # ==================== 메트릭 ====================
   /metrics/dashboard:

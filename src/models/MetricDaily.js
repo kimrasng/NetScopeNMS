@@ -5,7 +5,12 @@
 const { DataTypes, Op } = require('sequelize');
 const { sequelize } = require('../config/database');
 
-const METRIC_TYPES = ['cpu', 'memory', 'traffic_in', 'traffic_out', 'uptime', 'errors_in', 'errors_out', 'discards_in', 'discards_out', 'bandwidth_util'];
+const METRIC_TYPES = [
+  'cpu', 'memory', 'traffic_in', 'traffic_out', 'uptime', 
+  'errors_in', 'errors_out', 'discards_in', 'discards_out', 'bandwidth_util',
+  'temperature', 'disk_usage', 'load_avg_1', 'load_avg_5', 'load_avg_15',
+  'swap_usage', 'fan_speed', 'power_status', 'process_count', 'tcp_connections'
+];
 
 const MetricDaily = sequelize.define('MetricDaily', {
   id: {

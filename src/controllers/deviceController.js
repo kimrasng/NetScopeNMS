@@ -583,6 +583,116 @@ const pollDevice = async (req, res, next) => {
   }
 };
 
+/**
+ * MAC 주소 테이블 조회 (스위치용)
+ * GET /api/v1/devices/:id/mac-table
+ */
+const getMacTable = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { vlan, port, search } = req.query;
+
+    const device = await Device.findByPk(id, {
+      include: [{
+        model: SnmpCredential,
+        as: 'credentials',
+      }],
+    });
+
+    if (!device) {
+      throw ApiError.notFound('장비를 찾을 수 없습니다.');
+    }
+
+    if (!device.credentials) {
+      throw ApiError.badRequest('장비에 SNMP 자격증명이 설정되어 있지 않습니다.');
+    }
+
+    const credentials = device.credentials.getSessionCredentials();
+    let macTable = await snmpService.getMacAddressTable(device, credentials);
+
+    // 필터링 적용
+    if (vlan) {
+      macTable = macTable.filter(entry => entry.vlan_id === parseInt(vlan));
+    }
+    if (port) {
+      macTable = macTable.filter(entry => entry.port === parseInt(port) || entry.bridge_port === parseInt(port));
+    }
+    if (search) {
+      const searchLower = search.toLowerCase();
+      macTable = macTable.filter(entry => 
+        entry.mac_address.toLowerCase().includes(searchLower)
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `MAC 주소 테이블을 조회했습니다. (${macTable.length}개 항목)`,
+      data: {
+        deviceId: parseInt(id),
+        deviceName: device.name,
+        count: macTable.length,
+        macTable,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * ARP 테이블 조회
+ * GET /api/v1/devices/:id/arp-table
+ */
+const getArpTable = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { search, type } = req.query;
+
+    const device = await Device.findByPk(id, {
+      include: [{
+        model: SnmpCredential,
+        as: 'credentials',
+      }],
+    });
+
+    if (!device) {
+      throw ApiError.notFound('장비를 찾을 수 없습니다.');
+    }
+
+    if (!device.credentials) {
+      throw ApiError.badRequest('장비에 SNMP 자격증명이 설정되어 있지 않습니다.');
+    }
+
+    const credentials = device.credentials.getSessionCredentials();
+    let arpTable = await snmpService.getArpTable(device, credentials);
+
+    // 필터링 적용
+    if (type) {
+      arpTable = arpTable.filter(entry => entry.type === type);
+    }
+    if (search) {
+      const searchLower = search.toLowerCase();
+      arpTable = arpTable.filter(entry => 
+        entry.ip_address.includes(search) || 
+        entry.mac_address.toLowerCase().includes(searchLower)
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `ARP 테이블을 조회했습니다. (${arpTable.length}개 항목)`,
+      data: {
+        deviceId: parseInt(id),
+        deviceName: device.name,
+        count: arpTable.length,
+        arpTable,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getDevices,
   getDeviceById,
@@ -595,4 +705,6 @@ module.exports = {
   getDeviceSummary,
   toggleDevice,
   pollDevice,
+  getMacTable,
+  getArpTable,
 };

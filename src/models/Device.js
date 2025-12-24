@@ -83,6 +83,18 @@ const Device = sequelize.define('Device', {
     type: DataTypes.STRING(255),
     allowNull: true,
   },
+  sys_location: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  sys_contact: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
+  sys_object_id: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+  },
   sys_uptime: {
     type: DataTypes.BIGINT.UNSIGNED,
     allowNull: true,
