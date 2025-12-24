@@ -58,19 +58,19 @@ const STANDARD_OIDS = {
 const VENDOR_OIDS = {
   cisco: {
     cpu: {
-      // Cisco CPU utilization (5 second average)
-      cpmCPUTotal5sec: '1.3.6.1.4.1.9.9.109.1.1.1.1.3',
-      // Cisco CPU utilization (1 minute average)
-      cpmCPUTotal1min: '1.3.6.1.4.1.9.9.109.1.1.1.1.4',
-      // Cisco CPU utilization (5 minute average)
-      cpmCPUTotal5min: '1.3.6.1.4.1.9.9.109.1.1.1.1.5',
+      // Cisco CPU utilization (5 second average) - instance .1 for first CPU
+      cpmCPUTotal5sec: '1.3.6.1.4.1.9.9.109.1.1.1.1.3.1',
+      // Cisco CPU utilization (1 minute average) - instance .1 for first CPU
+      cpmCPUTotal1min: '1.3.6.1.4.1.9.9.109.1.1.1.1.4.1',
+      // Cisco CPU utilization (5 minute average) - instance .1 for first CPU
+      cpmCPUTotal5min: '1.3.6.1.4.1.9.9.109.1.1.1.1.5.1',
       // Old Cisco CPU OID
       avgBusy5: '1.3.6.1.4.1.9.2.1.58.0',
     },
     memory: {
-      // Cisco memory pool used
+      // Cisco memory pool used - instance .1 for processor memory pool
       ciscoMemoryPoolUsed: '1.3.6.1.4.1.9.9.48.1.1.1.5.1',
-      // Cisco memory pool free
+      // Cisco memory pool free - instance .1 for processor memory pool
       ciscoMemoryPoolFree: '1.3.6.1.4.1.9.9.48.1.1.1.6.1',
     },
     environment: {
@@ -178,7 +178,9 @@ const detectVendor = (sysDescr) => {
 };
 
 const getVendorOids = (vendor) => {
-  return VENDOR_OIDS[vendor] || VENDOR_OIDS.generic;
+  // Normalize vendor to lowercase for matching
+  const normalizedVendor = vendor ? vendor.toLowerCase() : 'generic';
+  return VENDOR_OIDS[normalizedVendor] || VENDOR_OIDS.generic;
 };
 
 const getCpuOids = (vendor) => {
@@ -189,6 +191,11 @@ const getCpuOids = (vendor) => {
 const getMemoryOids = (vendor) => {
   const vendorOids = getVendorOids(vendor);
   return vendorOids.memory || VENDOR_OIDS.generic.memory;
+};
+
+const getEnvironmentOids = (vendor) => {
+  const vendorOids = getVendorOids(vendor);
+  return vendorOids.environment || null;
 };
 
 const getInterfaceOids = (use64bit = true) => {
@@ -265,6 +272,7 @@ module.exports = {
   getVendorOids,
   getCpuOids,
   getMemoryOids,
+  getEnvironmentOids,
   getInterfaceOids,
   buildInterfaceOid,
   getAllMetricOids,

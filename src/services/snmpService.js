@@ -60,7 +60,16 @@ class SNMPService {
           return;
         }
 
-        resolve(varbinds[0].value);
+        let value = varbinds[0].value;
+        
+        // Handle Buffer (Counter64 returns as Buffer)
+        if (Buffer.isBuffer(value)) {
+          // Convert Buffer to BigInt then to Number
+          value = Number(value.readBigUInt64BE ? value.readBigUInt64BE(0) : 
+            BigInt('0x' + value.toString('hex')));
+        }
+
+        resolve(value);
       });
     });
   }
@@ -301,6 +310,18 @@ class SNMPService {
         });
       }
 
+      // Get temperature metrics
+      const temperatureValue = await this.collectTemperatureMetric(session, device.vendor);
+      if (temperatureValue !== null) {
+        metrics.push({
+          device_id: deviceId,
+          metric_type: 'temperature',
+          value: temperatureValue,
+          unit: 'celsius',
+          collected_at: collectedAt,
+        });
+      }
+
       // Get interface metrics
       const interfaces = await InterfaceInfo.findAll({
         where: { device_id: deviceId, is_monitored: true },
@@ -340,10 +361,11 @@ class SNMPService {
    * @returns {Promise<number|null>} - CPU percentage
    */
   async collectCpuMetric(session, vendor) {
-    const cpuOids = oidMapper.getCpuOids(vendor || 'generic');
+    const normalizedVendor = vendor ? vendor.toLowerCase() : 'generic';
+    const cpuOids = oidMapper.getCpuOids(normalizedVendor);
 
     try {
-      switch (vendor) {
+      switch (normalizedVendor) {
         case 'cisco':
           // Try Cisco CPU OIDs
           for (const oid of [cpuOids.cpmCPUTotal5min, cpuOids.cpmCPUTotal1min, cpuOids.avgBusy5]) {
@@ -395,10 +417,11 @@ class SNMPService {
    * @returns {Promise<number|null>} - Memory percentage
    */
   async collectMemoryMetric(session, vendor) {
-    const memoryOids = oidMapper.getMemoryOids(vendor || 'generic');
+    const normalizedVendor = vendor ? vendor.toLowerCase() : 'generic';
+    const memoryOids = oidMapper.getMemoryOids(normalizedVendor);
 
     try {
-      switch (vendor) {
+      switch (normalizedVendor) {
         case 'cisco':
           const [ciscoUsed, ciscoFree] = await Promise.all([
             this.get(session, memoryOids.ciscoMemoryPoolUsed),
@@ -450,6 +473,45 @@ class SNMPService {
       }
     } catch (error) {
       logger.warn(`Error collecting memory metric:`, error.message);
+    }
+
+    return null;
+  }
+
+  /**
+   * Collect temperature metric based on vendor
+   * @param {object} session - SNMP session
+   * @param {string} vendor - Device vendor
+   * @returns {Promise<number|null>} - Temperature in Celsius
+   */
+  async collectTemperatureMetric(session, vendor) {
+    const normalizedVendor = vendor ? vendor.toLowerCase() : 'generic';
+    const envOids = oidMapper.getEnvironmentOids(normalizedVendor);
+
+    if (!envOids) {
+      return null;
+    }
+
+    try {
+      switch (normalizedVendor) {
+        case 'cisco':
+          // Walk the temperature table to get all sensor values
+          const tempResults = await this.walk(session, envOids.ciscoEnvMonTemperatureStatusValue);
+          if (tempResults.length > 0) {
+            // Return the highest temperature (or first one)
+            const temps = tempResults.map(r => Number(r.value)).filter(v => !isNaN(v) && v > 0);
+            if (temps.length > 0) {
+              return Math.max(...temps);
+            }
+          }
+          break;
+
+        default:
+          // Generic temperature OIDs could be added here
+          break;
+      }
+    } catch (error) {
+      logger.warn(`Error collecting temperature metric:`, error.message);
     }
 
     return null;

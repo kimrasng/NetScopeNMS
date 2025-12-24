@@ -123,9 +123,9 @@ const metricValidation = {
     query('metrics')
       .optional()
       .custom((value) => {
-        const validMetrics = ['cpu', 'memory', 'traffic_in', 'traffic_out', 'bandwidth_util', 'errors_in', 'errors_out'];
+        const validMetrics = ['cpu', 'memory', 'temperature', 'traffic_in', 'traffic_out', 'bandwidth_util', 'errors_in', 'errors_out'];
         const metrics = value.split(',');
-        return metrics.every(m => validMetrics.includes(m));
+        return metrics.every(m => validMetrics.includes(m.trim()));
       })
       .withMessage('Invalid metric type'),
     query('from')

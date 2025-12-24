@@ -115,7 +115,7 @@ const getDeviceMetrics = async (req, res, next) => {
             },
           },
           order: [['day_timestamp', 'ASC']],
-          attributes: ['metric_type', 'avg_value', 'min_value', 'max_value', 'p95_value', 'sample_count', 'day_timestamp'],
+          attributes: ['metric_type', 'avg_value', 'min_value', 'max_value', 'sample_count', 'day_timestamp'],
         });
         break;
     }
@@ -134,7 +134,6 @@ const getDeviceMetrics = async (req, res, next) => {
             avg: item.avg_value,
             min: item.min_value,
             max: item.max_value,
-            p95: item.p95_value,
             samples: item.sample_count,
           };
       
@@ -282,7 +281,7 @@ const getLatestMetrics = async (req, res, next) => {
     }
 
     // 각 메트릭 타입의 최신 값 조회
-    const metricTypes = ['cpu', 'memory', 'traffic_in', 'traffic_out'];
+    const metricTypes = ['cpu', 'memory', 'temperature', 'traffic_in', 'traffic_out'];
     const latestMetrics = {};
 
     for (const metricType of metricTypes) {
@@ -303,12 +302,24 @@ const getLatestMetrics = async (req, res, next) => {
     // 인터페이스별 최신 트래픽
     const interfaces = await InterfaceInfo.findAll({
       where: { device_id: deviceId, if_oper_status: 'up' },
-      attributes: ['id', 'if_name', 'if_speed'],
+      attributes: ['id', 'if_name', 'if_descr', 'if_speed', 'if_high_speed', 'if_oper_status', 'if_admin_status'],
     });
+
+    // 속도를 사람이 읽기 쉬운 형식으로 변환
+    const formatSpeed = (bps) => {
+      if (bps === null || bps === undefined) return 'Unknown';
+      if (bps === 0) return '0 bps';
+      if (bps < 0) return 'Unknown';
+      if (bps >= 1000000000000) return `${(bps / 1000000000000).toFixed(1)} Tbps`;
+      if (bps >= 1000000000) return `${(bps / 1000000000).toFixed(1)} Gbps`;
+      if (bps >= 1000000) return `${(bps / 1000000).toFixed(1)} Mbps`;
+      if (bps >= 1000) return `${(bps / 1000).toFixed(1)} Kbps`;
+      return `${bps.toFixed(0)} bps`;
+    };
 
     const interfaceMetrics = [];
     for (const iface of interfaces) {
-      const [trafficIn, trafficOut] = await Promise.all([
+      const [trafficIn, trafficOut, bandwidthUtil] = await Promise.all([
         Metric.findOne({
           where: { interface_id: iface.id, metric_type: 'traffic_in' },
           order: [['collected_at', 'DESC']],
@@ -317,14 +328,28 @@ const getLatestMetrics = async (req, res, next) => {
           where: { interface_id: iface.id, metric_type: 'traffic_out' },
           order: [['collected_at', 'DESC']],
         }),
+        Metric.findOne({
+          where: { interface_id: iface.id, metric_type: 'bandwidth_util' },
+          order: [['collected_at', 'DESC']],
+        }),
       ]);
+
+      // 실제 링크 속도 (if_high_speed가 있으면 우선 사용)
+      const linkSpeed = iface.if_high_speed > 0 ? iface.if_high_speed * 1000000 : iface.if_speed;
 
       interfaceMetrics.push({
         id: iface.id,
         name: iface.if_name,
-        speed: iface.if_speed,
+        description: iface.if_descr,
+        status: iface.if_oper_status,
+        adminStatus: iface.if_admin_status,
+        speed: linkSpeed,
+        speedFormatted: formatSpeed(linkSpeed),
         trafficIn: trafficIn?.value || 0,
         trafficOut: trafficOut?.value || 0,
+        trafficInFormatted: formatSpeed(trafficIn?.value || 0),
+        trafficOutFormatted: formatSpeed(trafficOut?.value || 0),
+        bandwidthUtil: bandwidthUtil?.value || 0,
         timestamp: trafficIn?.collected_at || trafficOut?.collected_at,
       });
     }
@@ -373,7 +398,6 @@ const getMetricStatistics = async (req, res, next) => {
         [sequelize.fn('AVG', sequelize.col('avg_value')), 'avg'],
         [sequelize.fn('MIN', sequelize.col('min_value')), 'min'],
         [sequelize.fn('MAX', sequelize.col('max_value')), 'max'],
-        [sequelize.fn('AVG', sequelize.col('p95_value')), 'p95_avg'],
       ],
       group: ['metric_type'],
       raw: true,
@@ -385,7 +409,6 @@ const getMetricStatistics = async (req, res, next) => {
         avg: parseFloat(stat.avg) || 0,
         min: parseFloat(stat.min) || 0,
         max: parseFloat(stat.max) || 0,
-        p95: parseFloat(stat.p95_avg) || 0,
       };
     });
 

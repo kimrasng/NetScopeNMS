@@ -354,7 +354,7 @@ const testConnection = async (req, res, next) => {
         throw ApiError.notFound('장비를 찾을 수 없습니다.');
       }
 
-      credentials = device.credentials;
+      credentials = device.credentials?.getSessionCredentials() || {};
     } else {
       // 신규 장비 테스트 (body에서 정보 가져옴)
       const {
