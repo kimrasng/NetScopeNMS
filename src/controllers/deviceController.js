@@ -55,10 +55,26 @@ const getDevices = async (req, res, next) => {
       success: true,
       message: '장비 목록을 조회했습니다.',
       data: {
-        devices: devices.map(d => ({
-          ...d.toJSON(),
-          interfaceCount: d.interfaces?.length || 0,
-        })),
+        devices: devices.map(d => {
+          try {
+            const deviceData = d.toPublicJSON ? d.toPublicJSON() : d.toJSON();
+            return {
+              ...deviceData,
+              interfaceCount: Array.isArray(d.interfaces) ? d.interfaces.length : 0,
+            };
+          } catch (err) {
+            logger.error('Error serializing device:', err);
+            // Fallback to basic device data
+            return {
+              id: d.id,
+              name: d.name,
+              ipAddress: d.ip_address,
+              deviceType: d.device_type,
+              status: d.status,
+              interfaceCount: 0,
+            };
+          }
+        }),
         pagination: {
           total: count,
           page: parseInt(page),
@@ -68,6 +84,7 @@ const getDevices = async (req, res, next) => {
       },
     });
   } catch (error) {
+    logger.error('Error in getDevices:', error);
     next(error);
   }
 };

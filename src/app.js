@@ -21,6 +21,19 @@ const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const API_PREFIX = '/api/v1';
 
+// CORS 모든 origin 허용 (개발 환경)
+app.use(cors({
+  origin: true, // 모든 origin 허용
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400,
+}));
+
+// OPTIONS 요청 명시적 처리
+app.options('*', cors());
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -32,17 +45,6 @@ app.use(helmet({
   },
   crossOriginEmbedderPolicy: false,
 }));
-
-const corsOptions = {
-  origin: process.env.CORS_ORIGIN 
-    ? process.env.CORS_ORIGIN.split(',') 
-    : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:8080'],
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true,
-  maxAge: 86400, // 24 hours
-};
-app.use(cors(corsOptions));
 
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15분

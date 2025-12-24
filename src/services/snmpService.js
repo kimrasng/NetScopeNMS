@@ -196,8 +196,32 @@ class SNMPService {
           iface.if_name = ifName?.toString() || null;
           iface.if_alias = ifAlias?.toString() || null;
           iface.if_type = ifType ? Number(ifType) : null;
-          iface.if_speed = ifSpeed ? Number(ifSpeed) : null;
-          iface.if_high_speed = ifHighSpeed ? Number(ifHighSpeed) : null;
+          
+          // Handle speed values
+          // ifSpeed is in bps, ifHighSpeed is in Mbps
+          // Some devices return 0 or very large numbers (4294967295) for unknown speeds
+          const speedValue = ifSpeed ? Number(ifSpeed) : null;
+          const highSpeedValue = ifHighSpeed ? Number(ifHighSpeed) : null;
+          
+          // Filter out invalid speed values (0 or max uint32)
+          if (speedValue !== null && speedValue > 0 && speedValue < 4294967295) {
+            iface.if_speed = speedValue;
+          } else {
+            iface.if_speed = null;
+          }
+          
+          // ifHighSpeed is typically more reliable for high-speed interfaces
+          if (highSpeedValue !== null && highSpeedValue > 0 && highSpeedValue < 100000) {
+            iface.if_high_speed = highSpeedValue;
+          } else {
+            iface.if_high_speed = null;
+          }
+          
+          // Log if speed is missing for debugging
+          if (!iface.if_speed && !iface.if_high_speed && iface.if_oper_status === 'up') {
+            logger.debug(`Interface ${ifIndex} (${iface.if_name || iface.if_descr}) has no speed information`);
+          }
+          
           iface.if_phys_address = unitConverter.parseMacAddress(ifPhysAddress);
           iface.if_admin_status = unitConverter.parseIfStatus(ifAdminStatus);
           iface.if_oper_status = unitConverter.parseIfStatus(ifOperStatus);
