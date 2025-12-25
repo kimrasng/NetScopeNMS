@@ -1,0 +1,152 @@
+.alarms-page {
+  padding: 20px;
+}
+
+.alarms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.alarm-card {
+  background-color: #232630;
+  border: 1px solid #3a3f4f;
+  border-left: 4px solid;
+  border-radius: 8px;
+  padding: 20px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.alarm-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.alarm-card.severity-critical {
+  border-left-color: #dc3545;
+  background-color: rgba(220, 53, 69, 0.05);
+}
+
+.alarm-card.severity-warning {
+  border-left-color: #ffc107;
+  background-color: rgba(255, 193, 7, 0.05);
+}
+
+.alarm-card.severity-info {
+  border-left-color: #17a2b8;
+  background-color: rgba(23, 162, 184, 0.05);
+}
+
+.alarm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.alarm-title-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.severity-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.severity-badge.severity-critical {
+  background-color: #dc3545;
+  color: white;
+}
+
+.severity-badge.severity-warning {
+  background-color: #ffc107;
+  color: #000;
+}
+
+.severity-badge.severity-info {
+  background-color: #17a2b8;
+  color: white;
+}
+
+.alarm-card h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #e4e7eb;
+  font-weight: 600;
+  flex: 1;
+}
+
+.alarm-status {
+  padding: 4px 8px;
+  background-color: #3a3f4f;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #b0b3b8;
+}
+
+.alarm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-acknowledge,
+.btn-resolve {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.btn-acknowledge {
+  background-color: #ffc107;
+  color: #000;
+}
+
+.btn-acknowledge:hover {
+  background-color: #e0a800;
+}
+
+.btn-resolve {
+  background-color: #28a745;
+  color: white;
+}
+
+.btn-resolve:hover {
+  background-color: #218838;
+}
+
+.alarm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.alarm-message {
+  margin: 0;
+  color: #e4e7eb;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.alarm-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  font-size: 12px;
+  color: #b0b3b8;
+}
+
+.alarm-details span {
+  display: flex;
+  align-items: center;
+}
+

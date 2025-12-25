@@ -1,0 +1,59 @@
+.users-page {
+  padding: 20px;
+}
+
+.users-table-container {
+  background-color: #232630;
+  border: 1px solid #3a3f4f;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.users-table thead {
+  background-color: #2b2f3e;
+}
+
+.users-table th {
+  padding: 12px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b0b3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.users-table td {
+  padding: 12px;
+  border-top: 1px solid #3a3f4f;
+  color: #e4e7eb;
+  font-size: 14px;
+}
+
+.users-table tbody tr:hover {
+  background-color: #2b2f3e;
+}
+
+.status-badge.active {
+  background-color: rgba(40, 167, 69, 0.2);
+  color: #28a745;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-badge.inactive {
+  background-color: rgba(108, 117, 125, 0.2);
+  color: #6c757d;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+

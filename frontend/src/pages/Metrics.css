@@ -1,0 +1,56 @@
+.metrics-page {
+  padding: 20px;
+}
+
+.metrics-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.device-select,
+.period-select {
+  padding: 10px;
+  background-color: #232630;
+  border: 1px solid #3a3f4f;
+  border-radius: 4px;
+  color: #e4e7eb;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.device-select {
+  flex: 1;
+  max-width: 400px;
+}
+
+.period-select {
+  width: 150px;
+}
+
+.device-select:focus,
+.period-select:focus {
+  outline: none;
+  border-color: #4a9eff;
+}
+
+.metrics-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.chart-card {
+  background-color: #232630;
+  border: 1px solid #3a3f4f;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.chart-card h3 {
+  margin: 0 0 20px 0;
+  font-size: 16px;
+  color: #e4e7eb;
+  font-weight: 600;
+}
+
