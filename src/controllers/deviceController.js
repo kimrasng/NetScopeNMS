@@ -39,7 +39,10 @@ const getDevices = async (req, res, next) => {
     const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'name';
     const order = sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
 
-    const { count, rows: devices } = await Device.findAndCountAll({
+    // count를 별도로 계산 (include 사용 시 count 오류 방지)
+    const count = await Device.count({ where });
+    
+    const devices = await Device.findAll({
       where,
       include: [{
         model: InterfaceInfo,

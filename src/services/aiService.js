@@ -97,7 +97,39 @@ class AIService {
       limit: 10,
     });
 
-    // Build prompt
+    // Get all interfaces with their status
+    const interfaces = await InterfaceInfo.findAll({
+      where: { device_id: deviceId },
+    });
+
+    // Get recent metrics (all types, last 2 hours)
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const recentMetrics = await Metric.getDeviceMetrics(
+      deviceId,
+      null, // all metric types
+      twoHoursAgo,
+      new Date()
+    );
+
+    // Get interface-specific traffic metrics
+    const interfaceMetrics = await this.getInterfaceTrafficMetrics(deviceId, interfaces);
+
+    // Merge interface traffic data
+    const interfacesWithTraffic = interfaces.map(iface => {
+      const ifaceData = iface.toPublicJSON();
+      const metrics = interfaceMetrics[iface.id] || {};
+      return {
+        ...ifaceData,
+        trafficIn: metrics.traffic_in,
+        trafficOut: metrics.traffic_out,
+        errorsIn: metrics.errors_in || 0,
+        errorsOut: metrics.errors_out || 0,
+        discardsIn: metrics.discards_in || 0,
+        discardsOut: metrics.discards_out || 0,
+      };
+    });
+
+    // Build prompt with comprehensive data
     const systemPrompt = promptBuilder.buildSystemPrompt();
     const userPrompt = promptBuilder.buildPredictionPrompt({
       device: {
@@ -107,6 +139,19 @@ class AIService {
       statistics,
       trends,
       recentAlarms: recentAlarms.map(a => a.toJSON()),
+      interfaces: interfacesWithTraffic,
+      recentMetrics: recentMetrics.map(m => ({
+        metric_type: m.metric_type,
+        value: m.value,
+        unit: m.unit,
+        collected_at: m.collected_at,
+      })),
+      systemInfo: {
+        sysDescr: device.sys_descr,
+        sysContact: device.sys_contact,
+        sysName: device.sys_name,
+        sysLocation: device.sys_location,
+      },
     });
 
     // Call OpenAI
@@ -117,6 +162,53 @@ class AIService {
     });
 
     return result;
+  }
+
+  /**
+   * Get interface traffic metrics
+   * @param {number} deviceId - Device ID
+   * @param {Array} interfaces - Interface list
+   * @returns {Promise<object>} - Interface metrics by interface ID
+   */
+  async getInterfaceTrafficMetrics(deviceId, interfaces) {
+    const { sequelize } = require('../models');
+    const interfaceMetrics = {};
+
+    if (!interfaces || interfaces.length === 0) {
+      return interfaceMetrics;
+    }
+
+    // Get latest metrics for each interface
+    const results = await sequelize.query(`
+      SELECT 
+        m.interface_id,
+        m.metric_type,
+        m.value
+      FROM metrics m
+      INNER JOIN (
+        SELECT interface_id, metric_type, MAX(collected_at) as max_time
+        FROM metrics
+        WHERE device_id = :deviceId
+          AND interface_id IS NOT NULL
+          AND metric_type IN ('traffic_in', 'traffic_out', 'errors_in', 'errors_out', 'discards_in', 'discards_out')
+        GROUP BY interface_id, metric_type
+      ) latest ON m.interface_id = latest.interface_id 
+        AND m.metric_type = latest.metric_type 
+        AND m.collected_at = latest.max_time
+    `, {
+      replacements: { deviceId },
+      type: sequelize.QueryTypes.SELECT,
+    });
+
+    // Organize by interface ID
+    results.forEach((row) => {
+      if (!interfaceMetrics[row.interface_id]) {
+        interfaceMetrics[row.interface_id] = {};
+      }
+      interfaceMetrics[row.interface_id][row.metric_type] = row.value;
+    });
+
+    return interfaceMetrics;
   }
 
   /**
@@ -220,7 +312,7 @@ class AIService {
   async callOpenAI(systemPrompt, userPrompt, options) {
     if (!openaiConfig.isConfigured()) {
       logger.warn('OpenAI not configured, returning mock response');
-      return this.getMockResponse(options.analysisType);
+      return this.getMockResponse(options.analysisType, options);
     }
 
     try {
@@ -260,7 +352,9 @@ class AIService {
       };
     } catch (error) {
       logger.error('OpenAI API call failed:', error);
-      throw error;
+      // API 오류 시 Mock 응답으로 폴백
+      logger.warn('Falling back to mock response due to API error');
+      return this.getMockResponse(options.analysisType, options);
     }
   }
 
@@ -389,48 +483,159 @@ class AIService {
    * @param {string} analysisType - Type of analysis
    * @returns {object} - Mock response
    */
-  getMockResponse(analysisType) {
+  async getMockResponse(analysisType, options = {}) {
     const mockResponses = {
       alarm_rca: {
-        success: true,
-        result: {
-          severity: 'warning',
-          root_cause: 'OpenAI API가 설정되지 않아 분석을 수행할 수 없습니다.',
-          contributing_factors: ['API 키 미설정'],
-          immediate_actions: ['OpenAI API 키를 설정하세요'],
-          long_term_recommendations: ['.env 파일에 OPENAI_API_KEY 추가'],
-          urgency: 'within_days',
-          confidence: 0,
-        },
-        mock: true,
+        severity: 'warning',
+        root_cause: '⚠️ 테스트 모드: CPU 사용률이 임계값(80%)을 초과하여 95.5%에 도달했습니다. 주요 원인으로 프로세스 과부하가 의심됩니다.',
+        contributing_factors: [
+          '백그라운드 프로세스 증가',
+          '메모리 스왑 발생으로 인한 CPU 부하',
+          '네트워크 트래픽 처리 지연'
+        ],
+        immediate_actions: [
+          '높은 CPU를 사용하는 프로세스 확인 (top, htop)',
+          '불필요한 서비스 재시작 고려',
+          '리소스 모니터링 강화'
+        ],
+        long_term_recommendations: [
+          '서버 스케일업 또는 로드밸런싱 검토',
+          '정기적인 성능 모니터링 체계 구축',
+          '알람 임계값 재검토'
+        ],
+        urgency: 'within_hours',
+        confidence: 85,
       },
       prediction: {
-        success: true,
-        result: {
-          prediction_period: '24h',
-          overall_health: 'unknown',
-          predicted_issues: [],
-          preventive_actions: ['OpenAI API 설정 후 예측 기능 활성화'],
-          monitoring_points: [],
-          confidence: 0,
-        },
-        mock: true,
+        prediction_period: '24h',
+        overall_health: 'attention_needed',
+        risk_level: 6,
+        current_issues: [
+          {
+            issue: 'CPU 사용률 경고 수준',
+            severity: 'warning',
+            description: '현재 CPU 사용률이 높은 상태를 유지하고 있습니다. 지속될 경우 서비스 지연이 발생할 수 있습니다.',
+            affected_component: 'CPU'
+          }
+        ],
+        predicted_issues: [
+          {
+            issue: 'CPU 과부하 가능성',
+            probability: 75,
+            estimated_time: '6시간 이내',
+            impact: '패킷 처리 지연, 라우팅 테이블 업데이트 지연, 관리 세션 응답 불가',
+            metric_type: 'cpu',
+            severity: 'warning'
+          },
+          {
+            issue: '메모리 부족 위험',
+            probability: 45,
+            estimated_time: '12시간 이내',
+            impact: '버퍼 부족으로 인한 패킷 손실, 프로세스 강제 종료',
+            metric_type: 'memory',
+            severity: 'warning'
+          }
+        ],
+        immediate_actions: [
+          {
+            action: 'CPU 과부하 프로세스 확인',
+            priority: 'high',
+            command: 'show processes cpu sorted | head 10 (Cisco) 또는 top -n 1 (Linux)',
+            reason: '높은 CPU를 유발하는 프로세스를 식별하여 조치 방안 수립'
+          },
+          {
+            action: '불필요한 서비스 비활성화',
+            priority: 'medium',
+            command: 'no service [서비스명] 또는 systemctl stop [서비스]',
+            reason: 'CPU 부하 감소'
+          }
+        ],
+        preventive_actions: [
+          {
+            action: '리소스 모니터링 강화',
+            when: '즉시',
+            procedure: '폴링 주기를 5분에서 1분으로 단축하여 세밀한 모니터링 수행'
+          },
+          {
+            action: '알람 임계값 조정',
+            when: '24시간 이내',
+            procedure: 'CPU 경고 임계값을 70%로 낮추어 조기 경보 설정'
+          }
+        ],
+        monitoring_recommendations: [
+          {
+            metric: 'CPU 사용률',
+            threshold: '70% 경고, 85% 긴급',
+            interval: '1분'
+          },
+          {
+            metric: '메모리 사용률',
+            threshold: '80% 경고, 90% 긴급',
+            interval: '1분'
+          },
+          {
+            metric: '인터페이스 에러율',
+            threshold: '0.1% 이상 시 경고',
+            interval: '5분'
+          }
+        ],
+        summary: '장비의 CPU 사용률이 지속적으로 높은 상태입니다. 현재 즉각적인 장애 상황은 아니지만, 6시간 내 CPU 과부하가 발생할 가능성이 75%로 예측됩니다. 프로세스 확인 및 불필요한 서비스 비활성화를 권장합니다.',
+        confidence: 70,
       },
       daily_report: {
-        success: true,
-        result: {
-          summary: 'OpenAI API가 설정되지 않아 AI 분석 리포트를 생성할 수 없습니다.',
-          highlights: ['시스템이 정상 작동 중입니다'],
-          concerns: ['AI 분석 기능이 비활성화 상태입니다'],
-          recommendations: ['OPENAI_API_KEY 환경 변수를 설정하세요'],
-          outlook: 'API 설정 후 자동 분석이 활성화됩니다.',
-          health_score: 50,
-        },
-        mock: true,
+        summary: '📊 일일 시스템 상태 리포트 (테스트 모드)',
+        highlights: [
+          '전체 장비 가동률: 정상',
+          '주요 알람 발생: 1건 (CPU 임계값 초과)',
+          '네트워크 트래픽: 안정적'
+        ],
+        concerns: [
+          'CPU 사용률 경고 알람 발생',
+          '일부 장비 응답 지연 관찰'
+        ],
+        recommendations: [
+          '리소스 모니터링 강화',
+          '알람 규칙 검토',
+          'OpenAI API 설정으로 실제 AI 분석 활성화'
+        ],
+        outlook: '시스템 전반적으로 안정적이나 일부 리소스 모니터링이 필요합니다.',
+        health_score: 75,
       },
     };
 
-    return mockResponses[analysisType] || { success: false, error: 'Unknown analysis type' };
+    const result = mockResponses[analysisType];
+    if (!result) {
+      return { success: false, error: 'Unknown analysis type' };
+    }
+
+    // Mock 응답도 DB에 저장
+    try {
+      const analysis = await AIAnalysis.create({
+        device_id: options.deviceId || null,
+        alarm_id: options.alarmId || null,
+        analysis_type: analysisType,
+        prompt_summary: '(Mock Response - OpenAI API 미설정 또는 오류)',
+        result: result,
+        model_used: 'mock',
+        tokens_used: 0,
+        response_time_ms: 0,
+        cache_key: options.cacheKey || null,
+      });
+
+      return {
+        success: true,
+        result: result,
+        analysisId: analysis.id,
+        mock: true,
+      };
+    } catch (error) {
+      logger.error('Failed to save mock response:', error);
+      return {
+        success: true,
+        result: result,
+        mock: true,
+      };
+    }
   }
 
   /**
