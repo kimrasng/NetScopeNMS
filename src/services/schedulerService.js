@@ -108,7 +108,7 @@ class SchedulerService {
         logger.info('Hourly aggregation completed');
       } catch (error) {
         logger.error('Error in hourly aggregation:', error);
-      }
+
     }, {
       scheduled: true,
       timezone: 'Asia/Seoul',
@@ -130,7 +130,7 @@ class SchedulerService {
         // Daily aggregation
         await aggregationService.aggregateYesterday();
 
-        // Data cleanup
+
         await aggregationService.runAllCleanup();
 
         // Cleanup old alarms
