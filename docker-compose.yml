@@ -1,5 +1,5 @@
 x-openai-config: &openai-config
-  OPENAI_API_KEY: ""
+  OPENAI_API_KEY: ${OPENAI_API_KEY}
   OPENAI_MODEL: gpt-4
 
 services:

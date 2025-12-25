@@ -51,6 +51,11 @@ const createV1V2Options = (device, credentials) => {
 };
 
 const createV3User = (credentials) => {
+  // SNMP v3 requires username
+  if (!credentials.username) {
+    throw new Error('SNMP v3 requires a username. Please configure username in device credentials.');
+  }
+
   const user = {
     name: credentials.username,
     level: securityLevelMap[credentials.security_level || credentials.securityLevel] || snmp.SecurityLevel.noAuthNoPriv,
@@ -59,11 +64,17 @@ const createV3User = (credentials) => {
   const secLevel = credentials.security_level || credentials.securityLevel;
 
   if (secLevel !== 'noAuthNoPriv') {
+    if (!credentials.auth_password && !credentials.authPassword) {
+      throw new Error(`SNMP v3 security level '${secLevel}' requires auth_password. Please configure authentication password.`);
+    }
     user.authProtocol = authProtocolMap[credentials.auth_protocol || credentials.authProtocol] || snmp.AuthProtocols.sha;
     user.authKey = credentials.auth_password || credentials.authPassword;
   }
 
   if (secLevel === 'authPriv') {
+    if (!credentials.priv_password && !credentials.privPassword) {
+      throw new Error(`SNMP v3 security level '${secLevel}' requires priv_password. Please configure privacy password.`);
+    }
     user.privProtocol = privProtocolMap[credentials.priv_protocol || credentials.privProtocol] || snmp.PrivProtocols.aes;
     user.privKey = credentials.priv_password || credentials.privPassword;
   }

@@ -53,7 +53,10 @@ CREATE TABLE IF NOT EXISTS devices (
     
     -- 시스템 정보 (SNMP로 수집)
     sys_descr TEXT NULL,
-    sys_name VARCHAR(255) NULL,
+        sys_name VARCHAR(255) NULL,
+        sys_location VARCHAR(255) NULL,
+        sys_contact VARCHAR(255) NULL,
+        sys_object_id VARCHAR(255) NULL,
     sys_uptime BIGINT UNSIGNED NULL COMMENT 'timeticks',
     
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

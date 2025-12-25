@@ -24,6 +24,10 @@ class SNMPService {
 
     try {
       if (version === '3') {
+        // Validate SNMP v3 credentials before creating session
+        if (!credentials.username) {
+          throw new Error('SNMP v3 requires a username. Please configure username in device credentials.');
+        }
         const user = snmpConfig.createV3User(credentials);
         const options = snmpConfig.createV3Options(device, credentials);
         return snmp.createV3Session(target, user, options);
@@ -127,6 +131,27 @@ class SNMPService {
     const startTime = Date.now();
 
     try {
+      // Validate credentials before attempting connection
+      if (device.snmp_version === '3') {
+        if (!credentials || !credentials.username || credentials.username.trim() === '') {
+          logger.warn(`SNMP v3 connection attempt without username for device ${device.id || device.ip_address}`);
+          return {
+            success: false,
+            error: 'SNMP v3 requires a username. Please configure username in device credentials.',
+            responseTimeMs: Date.now() - startTime,
+          };
+        }
+      } else {
+        if (!credentials || !credentials.communityString || credentials.communityString.trim() === '') {
+          logger.warn(`SNMP v${device.snmp_version} connection attempt without community string for device ${device.id || device.ip_address}`);
+          return {
+            success: false,
+            error: `SNMP v${device.snmp_version} requires a community string. Please configure community string in device credentials.`,
+            responseTimeMs: Date.now() - startTime,
+          };
+        }
+      }
+
       session = this.createSession(device, credentials);
       const sysDescr = await this.get(session, oidMapper.STANDARD_OIDS.system.sysDescr);
       const sysName = await this.get(session, oidMapper.STANDARD_OIDS.system.sysName);
@@ -146,9 +171,22 @@ class SNMPService {
         detectedType: vendorInfo.type,
       };
     } catch (error) {
+      // Provide more helpful error messages
+      let errorMessage = error.message;
+      
+      if (errorMessage.includes('Unknown User Name') || errorMessage.includes('user name')) {
+        errorMessage = 'SNMP v3 requires a username. Please configure username in device credentials.';
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('Request timeout')) {
+        errorMessage = `Connection timeout. Device may be unreachable at ${device.ip_address}:${device.snmp_port || 161}`;
+      } else if (errorMessage.includes('Authentication failure') || errorMessage.includes('auth')) {
+        errorMessage = 'SNMP authentication failed. Please check username, auth_password, and security_level.';
+      } else if (errorMessage.includes('Privacy failure') || errorMessage.includes('priv')) {
+        errorMessage = 'SNMP privacy failed. Please check priv_password and priv_protocol.';
+      }
+      
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
         responseTimeMs: Date.now() - startTime,
       };
     } finally {
