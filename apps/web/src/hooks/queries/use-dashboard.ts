@@ -66,7 +66,12 @@ export function useDashboard(id: string | null) {
 export function useCreateDashboard() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { name: string; description?: string }) =>
+    mutationFn: (body: {
+      name: string;
+      description?: string;
+      widgets?: Array<{ widgetType: string; config: Record<string, unknown>; gridPosition: Record<string, unknown> }>;
+      isShared?: boolean;
+    }) =>
       apiFetch<Dashboard>("/api/dashboards", {
         method: "POST",
         body: JSON.stringify(body),
@@ -80,7 +85,7 @@ export function useCreateDashboard() {
 export function useUpdateDashboard() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; widgets?: Array<{ widgetType: string; config: Record<string, unknown>; gridPosition: Record<string, unknown> }>; name?: string; description?: string }) =>
+    mutationFn: ({ id, ...body }: { id: string; widgets?: Array<{ widgetType: string; config: Record<string, unknown>; gridPosition: Record<string, unknown> }>; name?: string; description?: string; isShared?: boolean }) =>
       apiFetch<Dashboard>(`/api/dashboards/${id}`, {
         method: "PUT",
         body: JSON.stringify(body),

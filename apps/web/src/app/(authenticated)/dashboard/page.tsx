@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   Plus, Pencil, Eye, Trash2, Check, Loader2, ChevronDown,
   LayoutGrid, BarChart3, PieChart, Activity, AlertTriangle,
-  Hexagon, Map, GitBranch, Monitor, Sparkles, X,
+  Hexagon, Map, GitBranch, Monitor, Sparkles, X, Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,10 +31,20 @@ import { getWidgetDefaultSize } from "@/components/dashboard/widget-registry";
 import {
   useDashboards, useDashboard, useCreateDashboard, useUpdateDashboard, useDeleteDashboard,
 } from "@/hooks/queries/use-dashboard";
+import { Switch } from "@/components/ui/switch";
+import { overviewTemplateWidgets, OVERVIEW_TEMPLATE_META } from "@/components/dashboard/templates/overview-template";
+import { networkTemplateWidgets, NETWORK_TEMPLATE_META } from "@/components/dashboard/templates/network-template";
+import { alertsTemplateWidgets, ALERTS_TEMPLATE_META } from "@/components/dashboard/templates/alerts-template";
 
 import type { Layout, Layouts } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
+
+const DASHBOARD_TEMPLATES = [
+  { meta: OVERVIEW_TEMPLATE_META, widgets: overviewTemplateWidgets },
+  { meta: NETWORK_TEMPLATE_META, widgets: networkTemplateWidgets },
+  { meta: ALERTS_TEMPLATE_META, widgets: alertsTemplateWidgets },
+] as const;
 
 // WidthProvider returns a class component whose @types/react version conflicts with the project's.
 // We cast through unknown to satisfy Next.js dynamic() while keeping runtime behavior correct.
@@ -101,6 +111,8 @@ export default function DashboardPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [newDashboardName, setNewDashboardName] = useState("");
+  const [createMode, setCreateMode] = useState<"blank" | "template">("blank");
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [localWidgets, setLocalWidgets] = useState<DashboardWidget[]>([]);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
@@ -215,17 +227,29 @@ export default function DashboardPage() {
 
   const handleCreateDashboard = useCallback(() => {
     if (!newDashboardName.trim()) return;
+    const tpl = createMode === "template" && selectedTemplate
+      ? DASHBOARD_TEMPLATES.find((t) => t.meta.id === selectedTemplate)
+      : null;
+    const widgetsPayload = tpl
+      ? tpl.widgets.map((w) => ({
+          widgetType: w.type,
+          config: w.config as Record<string, unknown>,
+          gridPosition: w.gridPosition as unknown as Record<string, unknown>,
+        }))
+      : undefined;
     createMutation.mutate(
-      { name: newDashboardName.trim() },
+      { name: newDashboardName.trim(), widgets: widgetsPayload },
       {
         onSuccess: (created) => {
           setSelectedDashboardId(created.id);
           setCreateDialogOpen(false);
           setNewDashboardName("");
+          setCreateMode("blank");
+          setSelectedTemplate(null);
         },
       },
     );
-  }, [newDashboardName, createMutation]);
+  }, [newDashboardName, createMode, selectedTemplate, createMutation]);
 
   const handleDeleteDashboard = useCallback(() => {
     if (!selectedDashboardId) return;
@@ -290,6 +314,11 @@ export default function DashboardPage() {
                       Default
                     </Badge>
                   )}
+                  {d.isShared && (
+                    <Badge variant="outline" className="ml-1 text-[10px] h-4 px-1">
+                      Shared
+                    </Badge>
+                  )}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -306,14 +335,30 @@ export default function DashboardPage() {
           </Button>
 
           {selectedDashboardId && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              onClick={() => setDeleteDialogOpen(true)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            <>
+              <div className="flex items-center gap-1.5">
+                <Switch
+                  id="share-toggle"
+                  checked={dashboards?.find((d) => d.id === selectedDashboardId)?.isShared ?? false}
+                  onCheckedChange={(checked) => {
+                    updateMutation.mutate({ id: selectedDashboardId, isShared: checked });
+                  }}
+                  aria-label="Share dashboard"
+                />
+                <Label htmlFor="share-toggle" className="text-xs text-muted-foreground flex items-center gap-1 cursor-pointer">
+                  <Share2 className="h-3 w-3" />
+                  Share
+                </Label>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </>
           )}
         </div>
 
@@ -456,21 +501,80 @@ export default function DashboardPage() {
         </SheetContent>
       </Sheet>
 
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent>
+      <Dialog open={createDialogOpen} onOpenChange={(open) => {
+        setCreateDialogOpen(open);
+        if (!open) { setCreateMode("blank"); setSelectedTemplate(null); setNewDashboardName(""); }
+      }}>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Create Dashboard</DialogTitle>
-            <DialogDescription>Give your new dashboard a name.</DialogDescription>
+            <DialogDescription>Start from scratch or pick a template.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="dashboard-name">Name</Label>
-            <Input
-              id="dashboard-name"
-              value={newDashboardName}
-              onChange={(e) => setNewDashboardName(e.target.value)}
-              placeholder="My Dashboard"
-              onKeyDown={(e) => e.key === "Enter" && handleCreateDashboard()}
-            />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="dashboard-name">Name</Label>
+              <Input
+                id="dashboard-name"
+                value={newDashboardName}
+                onChange={(e) => setNewDashboardName(e.target.value)}
+                placeholder="My Dashboard"
+                onKeyDown={(e) => e.key === "Enter" && handleCreateDashboard()}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Start from</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setCreateMode("blank"); setSelectedTemplate(null); }}
+                  className={cn(
+                    "rounded-lg border p-3 text-left transition-colors hover:bg-accent",
+                    createMode === "blank" && "border-primary bg-accent",
+                  )}
+                >
+                  <div className="text-sm font-medium">Blank Dashboard</div>
+                  <div className="text-xs text-muted-foreground">Start empty</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreateMode("template")}
+                  className={cn(
+                    "rounded-lg border p-3 text-left transition-colors hover:bg-accent",
+                    createMode === "template" && "border-primary bg-accent",
+                  )}
+                >
+                  <div className="text-sm font-medium">From Template</div>
+                  <div className="text-xs text-muted-foreground">Pre-built layouts</div>
+                </button>
+              </div>
+            </div>
+            {createMode === "template" && (
+              <div className="grid gap-2">
+                {DASHBOARD_TEMPLATES.map((tpl) => (
+                  <button
+                    key={tpl.meta.id}
+                    type="button"
+                    data-testid={`template-${tpl.meta.id}`}
+                    onClick={() => setSelectedTemplate(tpl.meta.id)}
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent",
+                      selectedTemplate === tpl.meta.id && "border-primary bg-accent",
+                    )}
+                  >
+                    <div className="rounded-md bg-muted p-2 shrink-0">
+                      <LayoutGrid className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium">{tpl.meta.name}</div>
+                      <div className="text-xs text-muted-foreground">{tpl.meta.description}</div>
+                      <Badge variant="secondary" className="mt-1 text-[10px] h-4 px-1">
+                        {tpl.meta.widgetCount} widgets
+                      </Badge>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
@@ -478,7 +582,7 @@ export default function DashboardPage() {
             </Button>
             <Button
               onClick={handleCreateDashboard}
-              disabled={!newDashboardName.trim() || createMutation.isPending}
+              disabled={!newDashboardName.trim() || (createMode === "template" && !selectedTemplate) || createMutation.isPending}
             >
               {createMutation.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
               Create
