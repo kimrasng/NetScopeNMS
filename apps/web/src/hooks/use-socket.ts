@@ -27,17 +27,13 @@ export function useSocket() {
 
     socketRef.current = socket;
 
-    socket.on("connect", () => {
-      console.log("[Socket] Connected:", socket.id);
-    });
+    socket.on("connect", () => {});
 
     socket.on("connect_error", (err) => {
       console.warn("[Socket] Connection error:", err.message);
     });
 
-    socket.on("disconnect", (reason) => {
-      console.log("[Socket] Disconnected:", reason);
-    });
+    socket.on("disconnect", (_reason) => {});
 
     // Listen for incident events
     socket.on("incident:created", (data) => {
