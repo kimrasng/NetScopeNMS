@@ -102,10 +102,10 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <h1 className="text-lg font-semibold tracking-tight">Settings</h1>
 
-      <div className="flex gap-5">
+        <div className="flex gap-4">
         <nav className="w-40 space-y-0.5">
           {tabs.map(t => (
             <button key={t.id} onClick={() => setActiveTab(t.id)}

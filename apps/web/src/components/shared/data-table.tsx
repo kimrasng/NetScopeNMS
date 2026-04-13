@@ -20,6 +20,8 @@ export interface ColumnDef<T> {
   cell?: (row: T) => ReactNode;
   sortable?: boolean;
   className?: string;
+  /** Show this column in mobile card view. First 3 columns shown by default if none specified. */
+  mobileVisible?: boolean;
 }
 
 export type SortDirection = "asc" | "desc";
@@ -60,6 +62,35 @@ function SkeletonRows({ colCount, rowCount = 5 }: { colCount: number; rowCount?:
   );
 }
 
+function MobileSkeletonCards({ count = 3 }: { count?: number }) {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: count }).map((_, i) => (
+        <Card key={i} className="p-3">
+          <div className="space-y-2">
+            <div className="h-3 w-2/3 rounded bg-muted animate-pulse" />
+            <div className="h-3 w-1/2 rounded bg-muted animate-pulse" />
+            <div className="h-3 w-1/3 rounded bg-muted animate-pulse" />
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function renderCellValue<T>(col: ColumnDef<T>, row: T): ReactNode {
+  if (col.cell) return col.cell(row);
+  if (col.accessorFn) return col.accessorFn(row);
+  return null;
+}
+
+function getMobileColumns<T>(columns: ColumnDef<T>[]): ColumnDef<T>[] {
+  const explicit = columns.filter((c) => c.mobileVisible === true);
+  if (explicit.length > 0) return explicit;
+  // Default: first 3 non-action columns
+  return columns.filter((c) => c.id !== "actions").slice(0, 3);
+}
+
 export function DataTable<T>({
   columns,
   data,
@@ -86,64 +117,108 @@ export function DataTable<T>({
       : <ArrowDown className="h-3 w-3 ml-1" />;
   };
 
+  const mobileColumns = getMobileColumns(columns);
+  const actionCol = columns.find((c) => c.id === "actions");
+
   return (
-    <Card className={className}>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            {columns.map((col) => (
-              <TableHead
-                key={col.id}
-                className={cn(
-                  col.sortable && onSort && "cursor-pointer select-none",
-                  col.className,
-                )}
-                onClick={() => handleSort(col)}
-              >
-                <span className="inline-flex items-center">
-                  {col.header}
-                  {renderSortIcon(col)}
-                </span>
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loading ? (
-            <SkeletonRows colCount={columns.length} />
-          ) : data.length === 0 ? (
+    <>
+      {/* ── Desktop table (md+) ── */}
+      <Card className={cn("hidden md:block", className)}>
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell
-                colSpan={columns.length}
-                className="text-center py-10 text-xs text-muted-foreground"
-              >
-                {emptyMessage}
-              </TableCell>
+              {columns.map((col) => (
+                <TableHead
+                  key={col.id}
+                  className={cn(
+                    col.sortable && onSort && "cursor-pointer select-none",
+                    col.className,
+                  )}
+                  onClick={() => handleSort(col)}
+                >
+                  <span className="inline-flex items-center">
+                    {col.header}
+                    {renderSortIcon(col)}
+                  </span>
+                </TableHead>
+              ))}
             </TableRow>
-          ) : (
-            data.map((row) => (
-              <TableRow
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <SkeletonRows colCount={columns.length} />
+            ) : data.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="text-center py-6 text-xs text-muted-foreground"
+                >
+                  {emptyMessage}
+                </TableCell>
+              </TableRow>
+            ) : (
+              data.map((row) => (
+                <TableRow
+                  key={rowKey(row)}
+                  className={cn(
+                    "hover:bg-accent/50 transition-colors",
+                    onRowClick && "cursor-pointer",
+                  )}
+                  onClick={() => onRowClick?.(row)}
+                >
+                  {columns.map((col) => (
+                    <TableCell key={col.id} className={col.className}>
+                      {renderCellValue(col, row)}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </Card>
+
+      {/* ── Mobile card view (<md) ── */}
+      <div className={cn("block md:hidden", className)}>
+        {loading ? (
+          <MobileSkeletonCards />
+        ) : data.length === 0 ? (
+          <Card className="p-6 text-center text-xs text-muted-foreground">
+            {emptyMessage}
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {data.map((row) => (
+              <Card
                 key={rowKey(row)}
                 className={cn(
-                  "hover:bg-accent/50 transition-colors",
-                  onRowClick && "cursor-pointer",
+                  "p-3 transition-colors",
+                  onRowClick && "cursor-pointer active:bg-accent/50",
                 )}
                 onClick={() => onRowClick?.(row)}
               >
-                {columns.map((col) => (
-                  <TableCell key={col.id} className={col.className}>
-                    {col.cell
-                      ? col.cell(row)
-                      : col.accessorFn
-                        ? col.accessorFn(row)
-                        : null}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </Card>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0 space-y-1">
+                    {mobileColumns.map((col, idx) => (
+                      <div key={col.id} className={idx === 0 ? "text-sm font-medium" : "text-xs text-muted-foreground"}>
+                        {idx > 0 && (
+                          <span className="text-muted-foreground/60 mr-1">{col.header}:</span>
+                        )}
+                        {renderCellValue(col, row)}
+                      </div>
+                    ))}
+                  </div>
+                  {actionCol && (
+                    <div className="shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center">
+                      {renderCellValue(actionCol, row)}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
   );
 }

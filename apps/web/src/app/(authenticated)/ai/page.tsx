@@ -70,7 +70,7 @@ export default function AIPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">AI Analysis</h1>
@@ -92,7 +92,7 @@ export default function AIPage() {
         </Card>
       ) : providers.length === 0 ? (
         <Card>
-          <CardContent className="p-8 text-center">
+          <CardContent className="p-6 text-center">
             <p className="text-sm font-medium">No AI providers configured</p>
             <p className="text-xs text-muted-foreground mt-1">Add an AI provider to enable incident analysis, RCA generation, and natural language queries.</p>
             <Button size="sm" className="mt-3" onClick={() => setShowAdd(true)}>Add Provider</Button>

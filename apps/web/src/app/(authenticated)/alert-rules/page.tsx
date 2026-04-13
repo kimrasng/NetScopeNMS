@@ -203,7 +203,7 @@ export default function AlertRulesPage() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Alert Rules</h1>

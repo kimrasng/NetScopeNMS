@@ -393,7 +393,7 @@ export default function DashboardPage() {
             size="sm"
             onClick={() => setIsEditMode((prev) => !prev)}
             data-testid="edit-mode-toggle"
-            className="hidden min-[376px]:inline-flex"
+            className="hidden sm:inline-flex"
           >
             {isEditMode ? (
               <>
@@ -412,7 +412,7 @@ export default function DashboardPage() {
 
       {localWidgets.length === 0 ? (
         <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+          <CardContent className="flex flex-col items-center justify-center py-10 text-center">
             <LayoutGrid className="h-10 w-10 text-muted-foreground/40 mb-3" />
             <p className="text-sm font-medium mb-1">No widgets yet</p>
             <p className="text-xs text-muted-foreground mb-4">
@@ -425,7 +425,7 @@ export default function DashboardPage() {
                 setIsEditMode(true);
                 setWidgetPanelOpen(true);
               }}
-              className="hidden min-[376px]:inline-flex"
+              className="hidden sm:inline-flex"
             >
               <Plus className="h-3.5 w-3.5 mr-1" />
               Add Widget
@@ -510,7 +510,7 @@ export default function DashboardPage() {
             <DialogTitle>Create Dashboard</DialogTitle>
             <DialogDescription>Start from scratch or pick a template.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+    <div className="space-y-3">
             <div className="space-y-2">
               <Label htmlFor="dashboard-name">Name</Label>
               <Input

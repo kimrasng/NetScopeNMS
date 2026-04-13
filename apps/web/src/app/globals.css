@@ -118,7 +118,7 @@
     transition-duration: 150ms;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-x-hidden;
   }
 }
 
@@ -143,5 +143,23 @@
   .glow-warning {
     box-shadow: 0 0 12px -2px hsl(var(--warning) / 0.45),
       0 0 4px -1px hsl(var(--warning) / 0.2);
+  }
+
+  /* ── Compact data-density utilities ── */
+  .compact-table th {
+    @apply h-8 text-xs py-1 px-2;
+  }
+  .compact-table td {
+    @apply py-1.5 px-2 text-xs;
+  }
+  .compact-table tr {
+    @apply leading-tight;
+  }
+
+  .compact-card {
+    @apply p-3;
+  }
+  .compact-card-sm {
+    @apply p-2;
   }
 }

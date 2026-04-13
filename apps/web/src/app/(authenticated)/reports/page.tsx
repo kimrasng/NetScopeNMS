@@ -40,7 +40,7 @@ export default function ReportsPage() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <h1 className="text-lg font-semibold tracking-tight">Reports</h1>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -79,7 +79,7 @@ export default function ReportsPage() {
               ))}
             </div>
           ) : reports.length === 0 ? (
-            <div className="text-center py-10 text-xs text-muted-foreground">No reports yet</div>
+            <div className="text-center py-6 text-xs text-muted-foreground">No reports yet</div>
           ) : (
             <div className="divide-y divide-border/50">
               {reports.map(r => {

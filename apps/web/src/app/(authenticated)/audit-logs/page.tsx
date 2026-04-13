@@ -125,7 +125,7 @@ export default function AuditLogsPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div>
         <h1 className="text-lg font-semibold tracking-tight flex items-center gap-2">
           <FileText className="h-5 w-5" /> Audit Logs

@@ -67,7 +67,7 @@ export default function MaintenancePage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-end justify-between">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Maintenance Windows</h1>
@@ -127,7 +127,7 @@ export default function MaintenancePage() {
               ))
             ) : windows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-10 text-xs text-muted-foreground">
+                <TableCell colSpan={7} className="text-center py-6 text-xs text-muted-foreground">
                   <Calendar className="h-8 w-8 mx-auto mb-3 text-muted-foreground/40" />
                   No maintenance windows found
                 </TableCell>

@@ -58,7 +58,7 @@ export default function ConfigSnapshotsPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-end justify-between">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Config Snapshots</h1>
@@ -128,7 +128,7 @@ export default function ConfigSnapshotsPage() {
               ))
             ) : snapshots.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-10 text-xs text-muted-foreground">
+                <TableCell colSpan={4} className="text-center py-6 text-xs text-muted-foreground">
                   <FileText className="h-8 w-8 mx-auto mb-3 text-muted-foreground/40" />
                   No config snapshots found
                 </TableCell>

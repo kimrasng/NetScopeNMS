@@ -68,7 +68,7 @@ export default function UsersPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Users</h1>
@@ -151,7 +151,7 @@ export default function UsersPage() {
             </TableHeader>
             <TableBody>
               {invitations.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-xs text-muted-foreground">No invitations</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center py-6 text-xs text-muted-foreground">No invitations</TableCell></TableRow>
               ) : invitations.map(inv => (
                 <TableRow key={inv.id} className="hover:bg-accent/50">
                   <TableCell className="text-xs">{inv.email || "-"}</TableCell>

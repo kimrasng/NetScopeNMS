@@ -94,14 +94,14 @@ export default function DevicesPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Devices</h1>
           <p className="text-xs text-muted-foreground">{pagination.total} registered</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center rounded-md border border-input bg-background p-0.5">
+          <div className="hidden md:flex items-center rounded-md border border-input bg-background p-0.5">
             <button
               onClick={() => setViewMode("table")}
               className={cn("rounded px-2 py-1 transition-colors", viewMode === "table" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}
@@ -115,7 +115,7 @@ export default function DevicesPage() {
               <LayoutGrid className="h-3.5 w-3.5" />
             </button>
           </div>
-          <Button size="sm" variant="outline" onClick={() => setShowAdd(true)}>
+          <Button size="sm" variant="outline" className="min-h-[44px] md:min-h-0" onClick={() => setShowAdd(true)}>
             <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Device
           </Button>
         </div>
@@ -127,14 +127,14 @@ export default function DevicesPage() {
           <Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-8 text-sm focus-visible:ring-primary/40 focus-visible:ring-2" />
         </div>
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-          className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 cursor-pointer">
+          className="min-h-[44px] md:min-h-0 md:h-8 rounded-md border border-input bg-background px-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 cursor-pointer">
           <option value="">All Types</option>
           {["router","switch","server","firewall","access_point","load_balancer","storage","other"].map(t => (
             <option key={t} value={t}>{t.replace("_"," ")}</option>
           ))}
         </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-          className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 cursor-pointer">
+          className="min-h-[44px] md:min-h-0 md:h-8 rounded-md border border-input bg-background px-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 cursor-pointer">
           <option value="">All Status</option>
           {["up","down","warning","unknown","maintenance"].map(s => (
             <option key={s} value={s}>{s}</option>
@@ -142,12 +142,13 @@ export default function DevicesPage() {
         </select>
       </div>
 
-      {viewMode === "card" ? (
-        loading ? (
+      {/* Card view: always on mobile, or when viewMode=card on desktop */}
+      <div className={cn(viewMode === "card" ? "block" : "block md:hidden")}>
+        {loading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {Array.from({ length: 8 }).map((_, i) => (
               <Card key={i}>
-                <CardContent className="p-4 space-y-3">
+                <CardContent className="p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="h-2.5 w-2.5 rounded-full bg-muted animate-pulse" />
                     <div className="flex gap-1">
@@ -166,17 +167,17 @@ export default function DevicesPage() {
             ))}
           </div>
         ) : devices.length === 0 ? (
-          <Card><CardContent className="py-10 text-center text-xs text-muted-foreground">No devices found</CardContent></Card>
+          <Card><CardContent className="py-6 text-center text-xs text-muted-foreground">No devices found</CardContent></Card>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {devices.map(d => (
               <Card key={d.id} className={cn("hover:shadow-lg hover:shadow-black/5 dark:hover:shadow-black/20 transition-all duration-200 border-t-2", statusBorder[d.status] || statusBorder.unknown)}>
-                <CardContent className="p-4">
+                <CardContent className="p-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className={cn("h-2.5 w-2.5 rounded-full", dot[d.status] || dot.unknown, dotGlow[d.status] || "")} />
                     <div className="flex gap-1">
-                      <button onClick={() => setEditDevice(d)} className="p-1 rounded hover:bg-muted"><Pencil className="h-3 w-3" /></button>
-                      <button onClick={() => handleDelete(d.id)} className="p-1 rounded hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
+                      <button onClick={() => setEditDevice(d)} className="min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center rounded hover:bg-muted"><Pencil className="h-3 w-3" /></button>
+                      <button onClick={() => handleDelete(d.id)} className="min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 flex items-center justify-center rounded hover:bg-destructive/10 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
                     </div>
                   </div>
                   <Link href={`/devices/${d.id}`} className="text-sm font-medium text-primary hover:underline">{d.name}</Link>
@@ -189,9 +190,12 @@ export default function DevicesPage() {
               </Card>
             ))}
           </div>
-        )
-      ) : (
-        <Card>
+        )}
+      </div>
+
+      {/* Table view: desktop only when viewMode=table */}
+      {viewMode === "table" && (
+        <Card className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -208,7 +212,7 @@ export default function DevicesPage() {
               {loading ? (
                 Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
               ) : devices.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-10 text-xs text-muted-foreground">No devices found</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-6 text-xs text-muted-foreground">No devices found</TableCell></TableRow>
               ) : devices.map(d => (
                 <TableRow key={d.id} className="hover:bg-accent/50 transition-colors">
                   <TableCell>

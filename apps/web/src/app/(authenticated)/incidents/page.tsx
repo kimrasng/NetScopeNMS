@@ -90,10 +90,10 @@ export default function IncidentsPage() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Incidents</h1>
+          <h1 className="text-lg font-semibold tracking-tight">Incidents</h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             {pagination.total} total incident{pagination.total !== 1 ? "s" : ""}
           </p>
@@ -105,7 +105,7 @@ export default function IncidentsPage() {
         <select
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value)}
-          className="h-8 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary cursor-pointer"
+          className="min-h-[44px] md:min-h-0 md:h-8 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary cursor-pointer"
         >
           <option value="">All Status</option>
           <option value="problem">Problem</option>
@@ -115,7 +115,7 @@ export default function IncidentsPage() {
         <select
           value={severityFilter}
           onChange={e => setSeverityFilter(e.target.value)}
-          className="h-8 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary cursor-pointer"
+          className="min-h-[44px] md:min-h-0 md:h-8 rounded-md border border-input bg-background px-3 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary cursor-pointer"
         >
           <option value="">All Severity</option>
           <option value="critical">Critical</option>
@@ -138,8 +138,8 @@ export default function IncidentsPage() {
           <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
               <Card key={i} className="border-l-4 border-l-muted">
-                <CardContent className="p-4">
-                  <div className="space-y-2.5">
+            <CardContent className="p-3">
+              <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <div className="h-2 w-2 bg-muted animate-pulse rounded-full" />
                       <div className="h-3 w-16 bg-muted animate-pulse rounded" />
@@ -158,7 +158,7 @@ export default function IncidentsPage() {
           </div>
         ) : incidents.length === 0 ? (
           <Card>
-            <CardContent className="text-center py-12 text-sm text-muted-foreground">
+            <CardContent className="text-center py-8 text-sm text-muted-foreground">
               <AlertTriangle className="h-8 w-8 mx-auto mb-3 text-muted-foreground/40" />
               No incidents found
             </CardContent>
@@ -172,10 +172,10 @@ export default function IncidentsPage() {
               sevGlow[inc.severity],
             )}
           >
-            <CardContent className="p-4">
+            <CardContent className="p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2.5 mb-1.5">
+                    <div className="flex items-center gap-2.5 mb-1">
                     <span className={cn("h-2 w-2 rounded-full ring-2 ring-offset-1 ring-offset-card", sevDot[inc.severity], {
                       "ring-red-500/30": inc.severity === "critical",
                       "ring-orange-500/30": inc.severity === "high",
@@ -193,7 +193,7 @@ export default function IncidentsPage() {
                     {inc.title}
                   </Link>
 
-                  <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground">
+                  <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
                     {inc.deviceName && <span className="font-mono text-[10px]">{inc.deviceName} ({inc.deviceIp})</span>}
                     {inc.metricName && (
                       <span className="px-1.5 py-0.5 rounded bg-muted text-[10px]">
@@ -209,14 +209,14 @@ export default function IncidentsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs h-7 border-amber-500/30 text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 hover:border-amber-500/50"
+                      className="text-xs min-h-[44px] md:min-h-0 md:h-7 border-amber-500/30 text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 hover:border-amber-500/50"
                       onClick={() => ack(inc.id)}
                     >
                       Ack
                     </Button>
                   )}
                   <Link href={`/incidents/${inc.id}`}>
-                    <Button variant="ghost" size="sm" className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground">
+                    <Button variant="ghost" size="sm" className="text-xs min-h-[44px] md:min-h-0 md:h-7 gap-1 text-muted-foreground hover:text-foreground">
                       View <ChevronRight className="h-3 w-3" />
                     </Button>
                   </Link>
