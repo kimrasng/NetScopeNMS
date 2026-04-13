@@ -3,6 +3,7 @@ import { z } from "zod";
 import { eq, sql, and, inArray, or } from "drizzle-orm";
 import { devices, interfaces } from "@netpulse/shared";
 import { authenticate, requireRole } from "../middleware/auth.js";
+import { logAudit } from "./audit-logs.js";
 
 const createDeviceSchema = z.object({
   name: z.string().min(1).max(255),
@@ -99,6 +100,7 @@ export async function deviceRoutes(app: FastifyInstance) {
   app.post("/", { preHandler: [requireRole("super_admin", "admin", "operator")] }, async (request, reply) => {
     const body = createDeviceSchema.parse(request.body);
     const [device] = await app.db.insert(devices).values(body).returning();
+    await logAudit(app.db, { userId: request.userId, action: "device.create", resource: "device", resourceId: device.id, details: body, ipAddress: request.ip });
     return reply.code(201).send(device);
   });
 
@@ -111,6 +113,7 @@ export async function deviceRoutes(app: FastifyInstance) {
       .where(eq(devices.id, id))
       .returning();
     if (!device) return reply.code(404).send({ error: "Device not found" });
+    await logAudit(app.db, { userId: request.userId, action: "device.update", resource: "device", resourceId: id, details: body, ipAddress: request.ip });
     return device;
   });
 
@@ -119,6 +122,7 @@ export async function deviceRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const [device] = await app.db.delete(devices).where(eq(devices.id, id)).returning();
     if (!device) return reply.code(404).send({ error: "Device not found" });
+    await logAudit(app.db, { userId: request.userId, action: "device.delete", resource: "device", resourceId: id, ipAddress: request.ip });
     return { message: "Device deleted" };
   });
 

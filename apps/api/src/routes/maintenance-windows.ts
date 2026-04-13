@@ -3,6 +3,7 @@ import { z } from "zod";
 import { eq, and, sql, desc, lte, gte, gt } from "drizzle-orm";
 import { maintenanceWindows } from "@netpulse/shared";
 import { authenticate, requireRole } from "../middleware/auth.js";
+import { logAudit } from "./audit-logs.js";
 
 const createWindowSchema = z.object({
   name: z.string().min(1).max(255),
@@ -76,6 +77,7 @@ export async function maintenanceWindowRoutes(app: FastifyInstance) {
         createdBy: request.userId,
       })
       .returning();
+    await logAudit(app.db, { userId: request.userId, action: "maintenance-window.create", resource: "maintenance-window", resourceId: window.id, details: body, ipAddress: request.ip });
     return reply.code(201).send(window);
   });
 
@@ -92,6 +94,7 @@ export async function maintenanceWindowRoutes(app: FastifyInstance) {
       .where(eq(maintenanceWindows.id, id))
       .returning();
     if (!window) return reply.code(404).send({ error: "Maintenance window not found" });
+    await logAudit(app.db, { userId: request.userId, action: "maintenance-window.update", resource: "maintenance-window", resourceId: id, details: body, ipAddress: request.ip });
     return window;
   });
 
@@ -99,6 +102,7 @@ export async function maintenanceWindowRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const [window] = await app.db.delete(maintenanceWindows).where(eq(maintenanceWindows.id, id)).returning();
     if (!window) return reply.code(404).send({ error: "Maintenance window not found" });
+    await logAudit(app.db, { userId: request.userId, action: "maintenance-window.delete", resource: "maintenance-window", resourceId: id, ipAddress: request.ip });
     return { message: "Maintenance window deleted" };
   });
 }

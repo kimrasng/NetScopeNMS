@@ -3,6 +3,7 @@ import { z } from "zod";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { incidents, incidentEvents, devices } from "@netpulse/shared";
 import { authenticate } from "../middleware/auth.js";
+import { logAudit } from "./audit-logs.js";
 
 const acknowledgeSchema = z.object({
   comment: z.string().optional(),
@@ -103,6 +104,7 @@ export async function incidentRoutes(app: FastifyInstance) {
       createdBy: request.userId!,
     });
 
+    await logAudit(app.db, { userId: request.userId!, action: "incident.acknowledge", resource: "incident", resourceId: id, ipAddress: request.ip });
     app.io.emit("incident:updated", updated);
     return updated;
   });
@@ -129,6 +131,7 @@ export async function incidentRoutes(app: FastifyInstance) {
       createdBy: request.userId!,
     });
 
+    await logAudit(app.db, { userId: request.userId!, action: "incident.resolve", resource: "incident", resourceId: id, ipAddress: request.ip });
     app.io.emit("incident:updated", updated);
     return updated;
   });

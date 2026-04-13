@@ -207,11 +207,12 @@ describe("Config Snapshots", () => {
     const { configSnapshotRoutes } = await import("../routes/config-snapshots.js");
     await configSnapshotRoutes(app);
 
-    expect(app.get).toHaveBeenCalledTimes(2);
+    expect(app.get).toHaveBeenCalledTimes(3);
     expect(app.post).toHaveBeenCalledTimes(1);
     expect(app.delete).toHaveBeenCalledTimes(1);
     expect(app.get.mock.calls[0][0]).toBe("/");
     expect(app.get.mock.calls[1][0]).toBe("/:id");
+    expect(app.get.mock.calls[2][0]).toBe("/:id1/diff/:id2");
   });
 });
 

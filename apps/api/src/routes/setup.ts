@@ -5,6 +5,7 @@ import { users, userInvitations, systemSettings } from "@netpulse/shared";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { requireRole } from "../middleware/auth.js";
+import { logAudit } from "./audit-logs.js";
 
 const setupSchema = z.object({
   email: z.string().email(),
@@ -68,6 +69,7 @@ export async function setupRoutes(app: FastifyInstance) {
     const body = siteSettingsSchema.parse(request.body);
     if (body.siteName !== undefined) await upsertSetting(app.db, "site_name", body.siteName);
     if (body.logoUrl !== undefined) await upsertSetting(app.db, "logo_url", body.logoUrl);
+    await logAudit(app.db, { userId: request.userId, action: "setup.site-update", resource: "site-settings", details: body, ipAddress: request.ip });
     return { ok: true };
   });
 
@@ -103,6 +105,7 @@ export async function setupRoutes(app: FastifyInstance) {
       invitedBy: request.userId!, expiresAt,
     }).returning();
 
+    await logAudit(app.db, { userId: request.userId!, action: "setup.invite-create", resource: "invitation", resourceId: invitation.id, details: { email: body.email, role: body.role }, ipAddress: request.ip });
     return reply.code(201).send({ invitation, inviteUrl: `/auth/invite?token=${inviteToken}` });
   });
 
@@ -158,6 +161,7 @@ export async function setupRoutes(app: FastifyInstance) {
   }, async (request: any) => {
     const { id } = request.params as { id: string };
     await app.db.delete(users).where(eq(users.id, id));
+    await logAudit(app.db, { userId: request.userId!, action: "setup.user-delete", resource: "user", resourceId: id, ipAddress: request.ip });
     return { ok: true };
   });
 }

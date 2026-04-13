@@ -4,6 +4,7 @@ import { z } from "zod";
 import { eq, sql, desc } from "drizzle-orm";
 import { configSnapshots } from "@netpulse/shared";
 import { authenticate, requireRole } from "../middleware/auth.js";
+import { logAudit } from "./audit-logs.js";
 
 const createSnapshotSchema = z.object({
   deviceId: z.string().uuid(),
@@ -60,13 +61,36 @@ export async function configSnapshotRoutes(app: FastifyInstance) {
       .values({ deviceId: body.deviceId, configText: body.configText, hash, diff })
       .returning();
 
+    await logAudit(app.db, { userId: request.userId, action: "config-snapshot.create", resource: "config-snapshot", resourceId: snapshot.id, details: { deviceId: body.deviceId }, ipAddress: request.ip });
     return reply.code(201).send(snapshot);
+  });
+
+  app.get("/:id1/diff/:id2", { preHandler: [authenticate] }, async (request, reply) => {
+    const { id1, id2 } = request.params as { id1: string; id2: string };
+    const [snap1, snap2] = await Promise.all([
+      app.db.select().from(configSnapshots).where(eq(configSnapshots.id, id1)).then(r => r[0]),
+      app.db.select().from(configSnapshots).where(eq(configSnapshots.id, id2)).then(r => r[0]),
+    ]);
+    if (!snap1) return reply.code(404).send({ error: "Snapshot id1 not found" });
+    if (!snap2) return reply.code(404).send({ error: "Snapshot id2 not found" });
+
+    const oldLines = snap1.configText.split("\n");
+    const newLines = snap2.configText.split("\n");
+    const oldSet = new Set(oldLines);
+    const newSet = new Set(newLines);
+
+    const added = newLines.filter(l => !oldSet.has(l));
+    const removed = oldLines.filter(l => !newSet.has(l));
+    const unchanged = oldLines.filter(l => newSet.has(l)).length;
+
+    return { added, removed, unchanged };
   });
 
   app.delete("/:id", { preHandler: [requireRole("super_admin", "admin", "operator")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const [snapshot] = await app.db.delete(configSnapshots).where(eq(configSnapshots.id, id)).returning();
     if (!snapshot) return reply.code(404).send({ error: "Config snapshot not found" });
+    await logAudit(app.db, { userId: request.userId, action: "config-snapshot.delete", resource: "config-snapshot", resourceId: id, ipAddress: request.ip });
     return { message: "Config snapshot deleted" };
   });
 }

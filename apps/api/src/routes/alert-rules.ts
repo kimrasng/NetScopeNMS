@@ -3,6 +3,7 @@ import { z } from "zod";
 import { eq, desc } from "drizzle-orm";
 import { alertRules } from "@netpulse/shared";
 import { authenticate, requireRole } from "../middleware/auth.js";
+import { logAudit } from "./audit-logs.js";
 
 const alertRuleSchema = z.object({
   name: z.string().min(1),
@@ -40,6 +41,7 @@ export async function alertRuleRoutes(app: FastifyInstance) {
   app.post("/", { preHandler: [requireRole("super_admin", "admin")] }, async (request, reply) => {
     const body = alertRuleSchema.parse(request.body);
     const [rule] = await app.db.insert(alertRules).values(body).returning();
+    await logAudit(app.db, { userId: request.userId, action: "alert-rule.create", resource: "alert-rule", resourceId: rule.id, details: body, ipAddress: request.ip });
     return reply.code(201).send(rule);
   });
 
@@ -51,6 +53,7 @@ export async function alertRuleRoutes(app: FastifyInstance) {
       .where(eq(alertRules.id, id))
       .returning();
     if (!rule) return reply.code(404).send({ error: "Alert rule not found" });
+    await logAudit(app.db, { userId: request.userId, action: "alert-rule.update", resource: "alert-rule", resourceId: id, details: body, ipAddress: request.ip });
     return rule;
   });
 
@@ -58,6 +61,7 @@ export async function alertRuleRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const [rule] = await app.db.delete(alertRules).where(eq(alertRules.id, id)).returning();
     if (!rule) return reply.code(404).send({ error: "Alert rule not found" });
+    await logAudit(app.db, { userId: request.userId, action: "alert-rule.delete", resource: "alert-rule", resourceId: id, ipAddress: request.ip });
     return { message: "Alert rule deleted" };
   });
 }

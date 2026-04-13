@@ -4,6 +4,7 @@ import { eq, desc } from "drizzle-orm";
 import { notificationChannels, notifications } from "@netpulse/shared";
 import { dispatchNotification, type NotificationPayload } from "@netpulse/notification";
 import { authenticate, requireRole } from "../middleware/auth.js";
+import { logAudit } from "./audit-logs.js";
 
 async function withRetry<T>(
   fn: () => Promise<T>,
@@ -84,6 +85,7 @@ export async function notificationRoutes(app: FastifyInstance) {
   app.post("/channels", { preHandler: [requireRole("super_admin", "admin")] }, async (request, reply) => {
     const body = channelSchema.parse(request.body);
     const [channel] = await app.db.insert(notificationChannels).values(body).returning();
+    await logAudit(app.db, { userId: request.userId, action: "notification-channel.create", resource: "notification-channel", resourceId: channel.id, details: body, ipAddress: request.ip });
     return reply.code(201).send(channel);
   });
 
@@ -96,6 +98,7 @@ export async function notificationRoutes(app: FastifyInstance) {
       .where(eq(notificationChannels.id, id))
       .returning();
     if (!channel) return reply.code(404).send({ error: "Channel not found" });
+    await logAudit(app.db, { userId: request.userId, action: "notification-channel.update", resource: "notification-channel", resourceId: id, details: body, ipAddress: request.ip });
     return channel;
   });
 
@@ -106,6 +109,7 @@ export async function notificationRoutes(app: FastifyInstance) {
       .where(eq(notificationChannels.id, id))
       .returning();
     if (!channel) return reply.code(404).send({ error: "Channel not found" });
+    await logAudit(app.db, { userId: request.userId, action: "notification-channel.delete", resource: "notification-channel", resourceId: id, ipAddress: request.ip });
     return { message: "Channel deleted" };
   });
 
