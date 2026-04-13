@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNotificationStore } from "@/stores";
 import { API_URL } from "@/lib/utils";
 
@@ -11,6 +12,7 @@ import { API_URL } from "@/lib/utils";
 export function useSocket() {
   const socketRef = useRef<Socket | null>(null);
   const { addNotification } = useNotificationStore();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -48,6 +50,8 @@ export function useSocket() {
         createdAt: new Date().toISOString(),
         incidentId: data.id,
       });
+      queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     });
 
     socket.on("incident:updated", (data) => {
@@ -60,6 +64,8 @@ export function useSocket() {
         createdAt: new Date().toISOString(),
         incidentId: data.id,
       });
+      queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     });
 
     socket.on("incident:comment", (data) => {
@@ -85,12 +91,13 @@ export function useSocket() {
           createdAt: new Date().toISOString(),
         });
       }
+      queryClient.invalidateQueries({ queryKey: ["devices"] });
     });
 
     return () => {
       socket.disconnect();
     };
-  }, [addNotification]);
+  }, [addNotification, queryClient]);
 
   const emit = useCallback((event: string, data: unknown) => {
     socketRef.current?.emit(event, data);
