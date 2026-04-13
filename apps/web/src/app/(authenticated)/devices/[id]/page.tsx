@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch, cn, formatBps } from "@/lib/utils";
 import { ArrowLeft, Cpu, HardDrive, Wifi, RefreshCw, Activity } from "lucide-react";
@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart } from "@/components/charts/line-chart";
 
 interface Device {
   id: string; name: string; ip: string; type: string; status: string;
@@ -206,48 +206,36 @@ export default function DeviceDetailPage() {
   );
 }
 
-function MiniChart({ title, icon, data, unit, color }: { title: string; icon: React.ReactNode; data: MetricPoint[]; unit: string; color: string }) {
-  const gradientId = `grad-${title.replace(/\s+/g, "-")}`;
+function MiniChart({ title, icon, data, unit }: { title: string; icon: React.ReactNode; data: MetricPoint[]; unit: string; color: string }) {
+  const nivoData = useMemo(() => {
+    if (data.length === 0) return [];
+    return [
+      {
+        id: title,
+        data: data.map((d) => ({
+          x: new Date(d.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          y: d.avg_value,
+        })),
+      },
+    ];
+  }, [data, title]);
+
   return (
     <Card>
       <CardHeader className="p-3 pb-0">
         <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">{icon} {title}</CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-2">
-        <div className="h-40">
-          {data.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-xs text-muted-foreground">No data</div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data}>
-                <defs>
-                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={color} stopOpacity={0.2} />
-                    <stop offset="95%" stopColor={color} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-                <XAxis
-                  dataKey="time"
-                  tickFormatter={v => new Date(v).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  tick={{ fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  unit={unit === "%" ? "%" : ""}
-                  tick={{ fontSize: 10 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={unit === "bps" ? (v: number) => formatBps(v) : undefined}
-                  width={unit === "bps" ? 60 : undefined}
-                />
-                <Tooltip contentStyle={{ fontSize: 11 }} labelFormatter={v => new Date(v).toLocaleString()} formatter={(v: number) => [unit === "bps" ? formatBps(v) : `${v.toFixed(2)} ${unit}`, title]} />
-                <Area type="monotone" dataKey="avg_value" stroke={color} fill={`url(#${gradientId})`} strokeWidth={1.5} />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </div>
+        {data.length === 0 ? (
+          <div className="flex items-center justify-center h-40 text-xs text-muted-foreground">No data</div>
+        ) : (
+          <LineChart
+            data={nivoData}
+            yLabel={unit === "%" ? "%" : unit === "bps" ? "bps" : undefined}
+            enableArea
+            height={160}
+          />
+        )}
       </CardContent>
     </Card>
   );
