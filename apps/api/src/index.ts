@@ -24,6 +24,8 @@ import { auditLogRoutes } from "./routes/audit-logs.js";
 import { configSnapshotRoutes } from "./routes/config-snapshots.js";
 import { maintenanceWindowRoutes } from "./routes/maintenance-windows.js";
 import { apiKeyRoutes } from "./routes/api-keys.js";
+import { dashboardCrudRoutes } from "./routes/dashboards.js";
+import { topologyRoutes } from "./routes/topology.js";
 
 /**
  * Bootstrap the Fastify server with all plugins and routes.
@@ -113,6 +115,8 @@ async function main() {
   await app.register(configSnapshotRoutes, { prefix: "/api/config-snapshots" });
   await app.register(maintenanceWindowRoutes, { prefix: "/api/maintenance-windows" });
   await app.register(apiKeyRoutes, { prefix: "/api/api-keys" });
+  await app.register(dashboardCrudRoutes, { prefix: "/api/dashboards" });
+  await app.register(topologyRoutes, { prefix: "/api/topology" });
 
   // ─── Health Check ────────────────────────────────
   app.get("/api/health", async () => ({ status: "ok", timestamp: new Date().toISOString() }));

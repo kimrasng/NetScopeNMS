@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, timestamp, boolean, jsonb, pgEnum, integer, real } from "drizzle-orm/pg-core";
+import { pgTable, uuid, varchar, text, timestamp, boolean, jsonb, pgEnum, integer, real, unique } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 // ─── Enums ───────────────────────────────────────────
@@ -299,6 +299,42 @@ export const apiKeys = pgTable("api_keys", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// ─── Dashboards ──────────────────────────────────────
+export const dashboards = pgTable("dashboards", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  isDefault: boolean("is_default").notNull().default(false),
+  isShared: boolean("is_shared").notNull().default(false),
+  templateId: varchar("template_id", { length: 255 }),
+  layoutConfig: jsonb("layout_config").$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ─── Dashboard Widgets ───────────────────────────────
+export const dashboardWidgets = pgTable("dashboard_widgets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  dashboardId: uuid("dashboard_id").notNull().references(() => dashboards.id, { onDelete: "cascade" }),
+  widgetType: text("widget_type").notNull(),
+  config: jsonb("config").$type<Record<string, unknown>>().default({}),
+  gridPosition: jsonb("grid_position").$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ─── Topology Positions ──────────────────────────────
+export const topologyPositions = pgTable("topology_positions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  deviceId: text("device_id").notNull(),
+  x: real("x").notNull(),
+  y: real("y").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  unique("topology_positions_user_device_unique").on(table.userId, table.deviceId),
+]);
+
 // ─── Relations ───────────────────────────────────────
 export const devicesRelations = relations(devices, ({ one, many }) => ({
   group: one(deviceGroups, { fields: [devices.groupId], references: [deviceGroups.id] }),
@@ -326,4 +362,17 @@ export const incidentEventsRelations = relations(incidentEvents, ({ one }) => ({
 export const notificationsRelations = relations(notifications, ({ one }) => ({
   incident: one(incidents, { fields: [notifications.incidentId], references: [incidents.id] }),
   channel: one(notificationChannels, { fields: [notifications.channelId], references: [notificationChannels.id] }),
+}));
+
+export const dashboardsRelations = relations(dashboards, ({ one, many }) => ({
+  user: one(users, { fields: [dashboards.userId], references: [users.id] }),
+  widgets: many(dashboardWidgets),
+}));
+
+export const dashboardWidgetsRelations = relations(dashboardWidgets, ({ one }) => ({
+  dashboard: one(dashboards, { fields: [dashboardWidgets.dashboardId], references: [dashboards.id] }),
+}));
+
+export const topologyPositionsRelations = relations(topologyPositions, ({ one }) => ({
+  user: one(users, { fields: [topologyPositions.userId], references: [users.id] }),
 }));
