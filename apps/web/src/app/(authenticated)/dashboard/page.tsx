@@ -1,543 +1,515 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
-import { apiFetch, cn, formatBps } from "@/lib/utils";
-import { CheckCircle, XCircle, AlertTriangle, Activity, Cpu, HardDrive, RefreshCw, Clock } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import dynamic from "next/dynamic";
+import { cn } from "@/lib/utils";
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell,
-} from "recharts";
-import Link from "next/link";
+  Plus, Pencil, Eye, Trash2, Check, Loader2, ChevronDown,
+  LayoutGrid, BarChart3, PieChart, Activity, AlertTriangle,
+  Hexagon, Map, GitBranch, Monitor, Sparkles, X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+} from "@/components/ui/sheet";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { WidgetWrapper } from "@/components/dashboard/widget-wrapper";
+import type {
+  WidgetType, DashboardWidget, GridPosition, WidgetConfig,
+} from "@/components/dashboard/types";
+import { WIDGET_TYPES } from "@/components/dashboard/types";
+import { getWidgetDefaultSize } from "@/components/dashboard/widget-registry";
+import {
+  useDashboards, useDashboard, useCreateDashboard, useUpdateDashboard, useDeleteDashboard,
+} from "@/hooks/queries/use-dashboard";
 
-/* ─── Types ─── */
+import type { Layout, Layouts } from "react-grid-layout";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
 
-interface DashboardSummary {
-  devices: { up_count: number; down_count: number; warning_count: number; unknown_count: number; total: number };
-  incidents: { problem_count: number; acknowledged_count: number; resolved_today: number; active_count: number };
-}
+// WidthProvider returns a class component whose @types/react version conflicts with the project's.
+// We cast through unknown to satisfy Next.js dynamic() while keeping runtime behavior correct.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ResponsiveGridLayout = dynamic(
+  () =>
+    import("react-grid-layout").then(
+      (mod) => mod.WidthProvider(mod.Responsive) as unknown as React.ComponentType<any>,
+    ),
+  { ssr: false },
+);
 
-interface RecentAlert {
-  incident: { id: string; title: string; severity: string; status: string; startedAt: string };
-  deviceName: string;
-  deviceIp: string;
-}
-
-interface TopDevice {
-  device_id: string; name: string; ip: string; type: string; value: number; metric_name: string;
-}
-
-/* ─── Helpers ─── */
-
-function timeAgo(date: string): string {
-  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
-}
-
-const DEVICE_COLORS: Record<string, string> = {
-  up: "#10b981",
-  down: "#ef4444",
-  warning: "#f59e0b",
-  unknown: "#9ca3af",
+const WIDGET_META: Record<WidgetType, { label: string; description: string; icon: typeof LayoutGrid }> = {
+  "stat-card":   { label: "Stat Card",     description: "Single metric with threshold colors",  icon: LayoutGrid },
+  "time-series": { label: "Time Series",   description: "Line/area chart over time",            icon: Activity },
+  "pie-chart":   { label: "Pie Chart",     description: "Distribution donut chart",             icon: PieChart },
+  "top-n-bar":   { label: "Top N Bar",     description: "Ranked bar chart by metric",           icon: BarChart3 },
+  "alert-feed":  { label: "Alert Feed",    description: "Live incident/alert stream",           icon: AlertTriangle },
+  "honeycomb":   { label: "Honeycomb",     description: "Hex grid device status map",           icon: Hexagon },
+  "map":         { label: "Map",           description: "Geographic device placement",          icon: Map },
+  "topology":    { label: "Topology",      description: "Network topology diagram",             icon: GitBranch },
+  "system-info": { label: "System Info",   description: "System uptime and health",             icon: Monitor },
+  "ai-summary":  { label: "AI Summary",    description: "AI-generated network overview",        icon: Sparkles },
 };
 
-const SEVERITY_BORDER: Record<string, string> = {
-  critical: "border-l-red-500",
-  high: "border-l-orange-500",
-  medium: "border-l-amber-500",
-  low: "border-l-blue-500",
-};
-
-const SEVERITY_DOT: Record<string, string> = {
-  critical: "bg-red-500 shadow-[0_0_6px_1px_rgba(239,68,68,0.4)]",
-  high: "bg-orange-500 shadow-[0_0_6px_1px_rgba(249,115,22,0.4)]",
-  medium: "bg-amber-500 shadow-[0_0_6px_1px_rgba(245,158,11,0.4)]",
-  low: "bg-blue-500 shadow-[0_0_6px_1px_rgba(59,130,246,0.4)]",
-};
-
-/** Color a usage bar by threshold */
-function usageBarColor(pct: number): string {
-  if (pct >= 80) return "bg-red-500";
-  if (pct >= 60) return "bg-amber-500";
-  return "bg-emerald-500";
+function defaultConfigForType(type: WidgetType): WidgetConfig {
+  const map: Record<WidgetType, WidgetConfig> = {
+    "stat-card":   { metric: "device_up_count", title: "Devices Up" },
+    "time-series": { metricName: "cpu", timeRange: "6h" },
+    "pie-chart":   { dataSource: "device_status" },
+    "top-n-bar":   { metric: "cpu", count: 5 },
+    "alert-feed":  { maxItems: 10 },
+    "honeycomb":   {},
+    "map":         {},
+    "topology":    {},
+    "system-info": {},
+    "ai-summary":  {},
+  };
+  return map[type];
 }
 
-function usageTextColor(pct: number): string {
-  if (pct >= 80) return "text-red-400";
-  if (pct >= 60) return "text-amber-400";
-  return "text-emerald-400";
+function defaultSizeForType(type: WidgetType): GridPosition {
+  const registered = getWidgetDefaultSize(type);
+  if (registered) return registered;
+  const sizes: Record<WidgetType, GridPosition> = {
+    "stat-card":   { x: 0, y: 0, w: 3, h: 2, minW: 2, minH: 2 },
+    "time-series": { x: 0, y: 0, w: 6, h: 4, minW: 3, minH: 3 },
+    "pie-chart":   { x: 0, y: 0, w: 4, h: 4, minW: 3, minH: 3 },
+    "top-n-bar":   { x: 0, y: 0, w: 4, h: 4, minW: 3, minH: 3 },
+    "alert-feed":  { x: 0, y: 0, w: 4, h: 5, minW: 3, minH: 3 },
+    "honeycomb":   { x: 0, y: 0, w: 6, h: 4, minW: 3, minH: 3 },
+    "map":         { x: 0, y: 0, w: 6, h: 5, minW: 4, minH: 4 },
+    "topology":    { x: 0, y: 0, w: 6, h: 5, minW: 4, minH: 4 },
+    "system-info": { x: 0, y: 0, w: 3, h: 3, minW: 2, minH: 2 },
+    "ai-summary":  { x: 0, y: 0, w: 4, h: 4, minW: 3, minH: 3 },
+  };
+  return sizes[type];
 }
-
-/* ─── Stat card themes ─── */
-
-const STAT_THEMES: Record<string, { border: string; iconBg: string; iconColor: string; valueColor: string }> = {
-  Up: {
-    border: "border-l-emerald-500",
-    iconBg: "bg-emerald-500/10",
-    iconColor: "text-emerald-500",
-    valueColor: "text-emerald-400",
-  },
-  Down: {
-    border: "border-l-red-500",
-    iconBg: "bg-red-500/10",
-    iconColor: "text-red-500",
-    valueColor: "text-red-400",
-  },
-  Incidents: {
-    border: "border-l-amber-500",
-    iconBg: "bg-amber-500/10",
-    iconColor: "text-amber-500",
-    valueColor: "text-amber-400",
-  },
-  Resolved: {
-    border: "border-l-blue-500",
-    iconBg: "bg-blue-500/10",
-    iconColor: "text-blue-500",
-    valueColor: "text-blue-400",
-  },
-};
-
-/* ─── Animated Counter ─── */
-
-function AnimatedCount({ value, className }: { value: number; className?: string }) {
-  const [display, setDisplay] = useState(0);
-  const prev = useRef(0);
-
-  useEffect(() => {
-    const start = prev.current;
-    const diff = value - start;
-    if (diff === 0) return;
-    const duration = 600;
-    const startTime = performance.now();
-
-    function tick(now: number) {
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      // ease-out cubic
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const current = Math.round(start + diff * eased);
-      setDisplay(current);
-      if (progress < 1) requestAnimationFrame(tick);
-      else prev.current = value;
-    }
-    requestAnimationFrame(tick);
-  }, [value]);
-
-  return <span className={className}>{display}</span>;
-}
-
-/* ─── Skeleton ─── */
-
-function ShimmerBlock({ className }: { className?: string }) {
-  return (
-    <div
-      className={cn(
-        "rounded bg-muted relative overflow-hidden",
-        className
-      )}
-    >
-      <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
-    </div>
-  );
-}
-
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-5">
-      <style jsx global>{`
-        @keyframes shimmer {
-          100% { transform: translateX(100%); }
-        }
-      `}</style>
-      {/* Header skeleton */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-1.5">
-          <ShimmerBlock className="h-6 w-32" />
-          <ShimmerBlock className="h-3.5 w-24" />
-        </div>
-        <ShimmerBlock className="h-4 w-28" />
-      </div>
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[...Array(4)].map((_, i) => (
-          <Card key={i} className="border-l-4 border-l-muted">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-2.5">
-                  <ShimmerBlock className="h-3 w-14" />
-                  <ShimmerBlock className="h-8 w-16" />
-                </div>
-                <ShimmerBlock className="h-9 w-9 rounded-lg" />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2">
-          <CardContent className="p-4 space-y-3">
-            <ShimmerBlock className="h-3 w-24" />
-            <ShimmerBlock className="h-52" />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <ShimmerBlock className="h-3 w-20" />
-            <ShimmerBlock className="h-44 w-44 rounded-full mx-auto" />
-          </CardContent>
-        </Card>
-      </div>
-      {/* Bottom row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {[...Array(2)].map((_, i) => (
-          <Card key={i}>
-            <CardContent className="p-4 space-y-3">
-              <ShimmerBlock className="h-3 w-20" />
-              {[...Array(4)].map((_, j) => (
-                <div key={j} className="space-y-1.5">
-                  <ShimmerBlock className="h-3.5 w-full" />
-                  <ShimmerBlock className="h-1.5 w-full rounded-full" />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ))}
-        <Card className="md:col-span-2 lg:col-span-1">
-          <CardContent className="p-4 space-y-3">
-            <ShimmerBlock className="h-3 w-24" />
-            {[...Array(4)].map((_, i) => (
-              <ShimmerBlock key={i} className="h-12" />
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-/* ─── Custom Tooltip ─── */
-
-function ThroughputTooltip({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-lg border border-border/50 bg-popover/95 backdrop-blur-sm px-3 py-2.5 shadow-xl shadow-black/20">
-      <p className="text-[11px] text-muted-foreground mb-2 font-medium">
-        {new Date(label).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-      </p>
-      {payload.map((entry: any) => (
-        <div key={entry.name} className="flex items-center gap-2 text-xs py-0.5">
-          <span className="h-2 w-2 rounded-full ring-1 ring-white/10" style={{ background: entry.color }} />
-          <span className="text-muted-foreground">{entry.name}:</span>
-          <span className="font-semibold tabular-nums text-foreground">{formatBps(entry.value)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ─── Main Page ─── */
 
 export default function DashboardPage() {
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [recentAlerts, setRecentAlerts] = useState<RecentAlert[]>([]);
-  const [topCpu, setTopCpu] = useState<TopDevice[]>([]);
-  const [topMemory, setTopMemory] = useState<TopDevice[]>([]);
-  const [throughput, setThroughput] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [selectedDashboardId, setSelectedDashboardId] = useState<string | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [widgetPanelOpen, setWidgetPanelOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [newDashboardName, setNewDashboardName] = useState("");
+  const [localWidgets, setLocalWidgets] = useState<DashboardWidget[]>([]);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
-  const load = useCallback(async () => {
-    try {
-      const [s, alerts, cpu, mem, tp] = await Promise.all([
-        apiFetch<DashboardSummary>("/api/dashboard/summary"),
-        apiFetch<RecentAlert[]>("/api/dashboard/recent-alerts?limit=10"),
-        apiFetch<TopDevice[]>("/api/dashboard/top-devices?metric=cpu&limit=5"),
-        apiFetch<TopDevice[]>("/api/dashboard/top-devices?metric=memory&limit=5"),
-        apiFetch<any[]>("/api/dashboard/throughput?hours=6"),
-      ]);
-      setSummary(s);
-      setRecentAlerts(alerts);
-      setTopCpu(cpu);
-      setTopMemory(mem);
-      setThroughput(tp);
-      setLastUpdated(new Date());
-    } catch (err) {
-      console.error("Dashboard load error:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { data: dashboards, isLoading: dashboardsLoading } = useDashboards();
+  const { data: activeDashboard } = useDashboard(selectedDashboardId);
+  const createMutation = useCreateDashboard();
+  const updateMutation = useUpdateDashboard();
+  const deleteMutation = useDeleteDashboard();
 
   useEffect(() => {
-    load();
-    const interval = setInterval(load, 30000);
-    return () => clearInterval(interval);
-  }, [load]);
+    if (dashboards?.length && !selectedDashboardId) {
+      const def = dashboards.find((d) => d.isDefault) ?? dashboards[0];
+      setSelectedDashboardId(def.id);
+    }
+  }, [dashboards, selectedDashboardId]);
 
-  if (loading) return <DashboardSkeleton />;
+  useEffect(() => {
+    if (!activeDashboard) return;
+    const widgets: DashboardWidget[] = (activeDashboard.widgets ?? []).map((w) => ({
+      id: w.id,
+      type: w.widgetType as WidgetType,
+      config: w.config as unknown as WidgetConfig,
+      gridPosition: w.gridPosition as unknown as GridPosition,
+    }));
+    setLocalWidgets(widgets);
+  }, [activeDashboard]);
 
-  const stats = [
-    { label: "Up", value: summary?.devices.up_count ?? 0, icon: CheckCircle },
-    { label: "Down", value: summary?.devices.down_count ?? 0, icon: XCircle },
-    { label: "Incidents", value: summary?.incidents.active_count ?? 0, icon: AlertTriangle },
-    { label: "Resolved", value: summary?.incidents.resolved_today ?? 0, icon: Activity },
-  ];
-
-  const deviceStatusData = [
-    { name: "Up", value: summary?.devices.up_count ?? 0, key: "up" },
-    { name: "Down", value: summary?.devices.down_count ?? 0, key: "down" },
-    { name: "Warning", value: summary?.devices.warning_count ?? 0, key: "warning" },
-    { name: "Unknown", value: summary?.devices.unknown_count ?? 0, key: "unknown" },
-  ].filter((d) => d.value > 0);
-
-  return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight">Dashboard</h1>
-          <span className="text-xs text-muted-foreground">{summary?.devices.total ?? 0} devices monitored</span>
-        </div>
-        {lastUpdated && (
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <RefreshCw className="h-3 w-3 animate-[spin_3s_linear_infinite] opacity-40" />
-            <span>Updated {lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Status Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {stats.map((s) => {
-          const theme = STAT_THEMES[s.label];
-          return (
-            <Card
-              key={s.label}
-              className={cn(
-                "border-l-4 transition-shadow hover:shadow-md hover:shadow-black/5",
-                theme.border
-              )}
-            >
-              <CardContent className="p-3 flex items-center justify-between">
-                <div>
-                  <div className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">{s.label}</div>
-                  <AnimatedCount
-                    value={s.value}
-                    className={cn("text-2xl font-bold tabular-nums", theme.valueColor)}
-                  />
-                </div>
-                <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center", theme.iconBg, theme.iconColor)}>
-                  <s.icon className="h-4 w-4" />
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Throughput Chart */}
-        <Card className="lg:col-span-2 transition-shadow hover:shadow-md hover:shadow-black/5">
-          <CardHeader className="p-3 pb-0">
-            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Throughput (6h)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-2">
-            <div className="h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={throughput}>
-                  <defs>
-                    <linearGradient id="gradIn" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="gradOut" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-                  <XAxis
-                    dataKey="bucket"
-                    tickFormatter={(v) => new Date(v).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    tick={{ fontSize: 10 }}
-                    axisLine={false}
-                    tickLine={false}
-                    className="fill-muted-foreground"
-                  />
-                  <YAxis
-                    tick={{ fontSize: 10 }}
-                    tickFormatter={(v) => formatBps(v)}
-                    axisLine={false}
-                    tickLine={false}
-                    width={60}
-                    className="fill-muted-foreground"
-                  />
-                  <Tooltip content={<ThroughputTooltip />} />
-                  <Area type="monotone" dataKey="total_in" name="In" stroke="hsl(217, 91%, 60%)" fill="url(#gradIn)" strokeWidth={2} dot={false} />
-                  <Area type="monotone" dataKey="total_out" name="Out" stroke="#10b981" fill="url(#gradOut)" strokeWidth={2} dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Device Status Donut */}
-        <Card className="transition-shadow hover:shadow-md hover:shadow-black/5">
-          <CardHeader className="p-3 pb-0">
-            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              Device Status
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-0 flex flex-col items-center justify-center">
-            <div className="relative">
-              <PieChart width={180} height={180}>
-                <Pie
-                  data={deviceStatusData}
-                  cx={90}
-                  cy={90}
-                  innerRadius={55}
-                  outerRadius={80}
-                  paddingAngle={3}
-                  dataKey="value"
-                  strokeWidth={0}
-                >
-                  {deviceStatusData.map((entry) => (
-                    <Cell key={entry.key} fill={DEVICE_COLORS[entry.key]} />
-                  ))}
-                </Pie>
-              </PieChart>
-              {/* Center label */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-2xl font-bold tabular-nums">{summary?.devices.total ?? 0}</span>
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Total</span>
-              </div>
-            </div>
-            {/* Legend */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
-              {[
-                { label: "Up", key: "up", value: summary?.devices.up_count ?? 0 },
-                { label: "Down", key: "down", value: summary?.devices.down_count ?? 0 },
-                { label: "Warning", key: "warning", value: summary?.devices.warning_count ?? 0 },
-                { label: "Unknown", key: "unknown", value: summary?.devices.unknown_count ?? 0 },
-              ].map((item) => (
-                <div key={item.key} className="flex items-center gap-1.5 text-[11px]">
-                  <span className="h-2 w-2 rounded-full shrink-0" style={{ background: DEVICE_COLORS[item.key] }} />
-                  <span className="text-muted-foreground">{item.label}</span>
-                  <span className="font-medium tabular-nums ml-auto">{item.value}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Bottom Row: CPU/Memory + Alerts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Top CPU */}
-        <UsageCard title="CPU" icon={<Cpu className="h-3.5 w-3.5" />} data={topCpu} />
-
-        {/* Top Memory */}
-        <UsageCard title="Memory" icon={<HardDrive className="h-3.5 w-3.5" />} data={topMemory} />
-
-        {/* Recent Alerts */}
-        <Card className="md:col-span-2 lg:col-span-1 transition-shadow hover:shadow-md hover:shadow-black/5">
-          <CardHeader className="p-3 pb-0">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <Clock className="h-3 w-3" /> Recent Alerts
-              </CardTitle>
-              {recentAlerts.length > 0 && (
-                <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-                  {recentAlerts.length}
-                </Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="h-60">
-              <div className="px-3 pb-3 pt-2 space-y-1">
-                {recentAlerts.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-8">No alerts</p>
-                ) : (
-                  recentAlerts.map((a) => (
-                    <Link
-                      key={a.incident.id}
-                      href={`/incidents/${a.incident.id}`}
-                      className={cn(
-                        "block rounded-md border-l-[3px] pl-2.5 pr-2 py-2 hover:bg-accent/50 transition-colors",
-                        SEVERITY_BORDER[a.incident.severity] ?? "border-l-border"
-                      )}
-                    >
-                      <div className="flex items-center justify-between mb-0.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className={cn(
-                            "h-1.5 w-1.5 rounded-full",
-                            SEVERITY_DOT[a.incident.severity] ?? "bg-muted-foreground"
-                          )} />
-                          <span className="text-[10px] text-muted-foreground uppercase font-medium">{a.incident.severity}</span>
-                        </div>
-                        <span className="text-[10px] text-muted-foreground tabular-nums">{timeAgo(a.incident.startedAt)}</span>
-                      </div>
-                      <div className="text-xs font-medium truncate">{a.incident.title}</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">{a.deviceName} · {a.deviceIp}</div>
-                    </Link>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+  const debouncedSave = useCallback(
+    (widgets: DashboardWidget[]) => {
+      if (!selectedDashboardId) return;
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      setSaveStatus("saving");
+      saveTimerRef.current = setTimeout(() => {
+        updateMutation.mutate(
+          {
+            id: selectedDashboardId,
+            widgets: widgets.map((w) => ({
+              widgetType: w.type,
+              config: w.config as Record<string, unknown>,
+              gridPosition: w.gridPosition as unknown as Record<string, unknown>,
+            })),
+          },
+          {
+            onSuccess: () => {
+              setSaveStatus("saved");
+              savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
+            },
+            onError: () => setSaveStatus("idle"),
+          },
+        );
+      }, 1000);
+    },
+    [selectedDashboardId, updateMutation],
   );
-}
 
-/* ─── Usage Card (CPU / Memory) ─── */
+  const handleLayoutChange = useCallback(
+    (layout: Layout[]) => {
+      if (!isEditMode) return;
+      setLocalWidgets((prev) => {
+        const updated = prev.map((widget) => {
+          const item = layout.find((l) => l.i === widget.id);
+          if (!item) return widget;
+          return {
+            ...widget,
+            gridPosition: {
+              ...widget.gridPosition,
+              x: item.x,
+              y: item.y,
+              w: item.w,
+              h: item.h,
+            },
+          };
+        });
+        debouncedSave(updated);
+        return updated;
+      });
+    },
+    [isEditMode, debouncedSave],
+  );
 
-function UsageCard({ title, icon, data }: { title: string; icon: React.ReactNode; data: TopDevice[] }) {
+  const addWidget = useCallback(
+    (type: WidgetType) => {
+      const id = `widget-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const size = defaultSizeForType(type);
+      const maxY = localWidgets.reduce((max, w) => Math.max(max, w.gridPosition.y + w.gridPosition.h), 0);
+      const newWidget: DashboardWidget = {
+        id,
+        type,
+        config: defaultConfigForType(type),
+        gridPosition: { ...size, x: 0, y: maxY },
+      };
+      const next = [...localWidgets, newWidget];
+      setLocalWidgets(next);
+      debouncedSave(next);
+      setWidgetPanelOpen(false);
+    },
+    [localWidgets, debouncedSave],
+  );
+
+  const removeWidget = useCallback(
+    (widgetId: string) => {
+      const next = localWidgets.filter((w) => w.id !== widgetId);
+      setLocalWidgets(next);
+      debouncedSave(next);
+    },
+    [localWidgets, debouncedSave],
+  );
+
+  const handleCreateDashboard = useCallback(() => {
+    if (!newDashboardName.trim()) return;
+    createMutation.mutate(
+      { name: newDashboardName.trim() },
+      {
+        onSuccess: (created) => {
+          setSelectedDashboardId(created.id);
+          setCreateDialogOpen(false);
+          setNewDashboardName("");
+        },
+      },
+    );
+  }, [newDashboardName, createMutation]);
+
+  const handleDeleteDashboard = useCallback(() => {
+    if (!selectedDashboardId) return;
+    deleteMutation.mutate(selectedDashboardId, {
+      onSuccess: () => {
+        setSelectedDashboardId(null);
+        setDeleteDialogOpen(false);
+        setIsEditMode(false);
+      },
+    });
+  }, [selectedDashboardId, deleteMutation]);
+
+  const gridLayouts: Layouts = useMemo(() => {
+    const lg: Layout[] = localWidgets.map((w) => ({
+      i: w.id,
+      x: w.gridPosition.x,
+      y: w.gridPosition.y,
+      w: w.gridPosition.w,
+      h: w.gridPosition.h,
+      minW: w.gridPosition.minW ?? 2,
+      minH: w.gridPosition.minH ?? 2,
+      static: !isEditMode,
+    }));
+    return { lg, md: lg, sm: lg };
+  }, [localWidgets, isEditMode]);
+
+  const currentDashboardName = dashboards?.find((d) => d.id === selectedDashboardId)?.name ?? "Dashboard";
+
+  if (dashboardsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
-    <Card className="transition-shadow hover:shadow-md hover:shadow-black/5">
-      <CardHeader className="p-3 pb-0">
-        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-          {icon} Top {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-3 pt-2">
-        <div className="space-y-3">
-          {data.map((d) => {
-            const pct = Math.min(d.value, 100);
-            return (
-              <div key={d.device_id}>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-medium truncate">{d.name}</div>
-                    <div className="text-[10px] text-muted-foreground font-mono">{d.ip}</div>
-                  </div>
-                  <span className={cn("text-sm font-bold tabular-nums ml-2", usageTextColor(pct))}>
-                    {d.value.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className={cn("h-full rounded-full transition-all duration-700 ease-out", usageBarColor(pct))}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-          {data.length === 0 && <p className="text-xs text-muted-foreground text-center py-3">No data</p>}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <LayoutGrid className="h-3.5 w-3.5" />
+                <span className="truncate max-w-[160px]">{currentDashboardName}</span>
+                <ChevronDown className="h-3 w-3 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {dashboards?.map((d) => (
+                <DropdownMenuItem
+                  key={d.id}
+                  onClick={() => {
+                    setSelectedDashboardId(d.id);
+                    setIsEditMode(false);
+                  }}
+                  className={cn(d.id === selectedDashboardId && "bg-accent")}
+                >
+                  {d.name}
+                  {d.isDefault && (
+                    <Badge variant="secondary" className="ml-2 text-[10px] h-4 px-1">
+                      Default
+                    </Badge>
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCreateDialogOpen(true)}
+            data-testid="create-dashboard-btn"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            New
+          </Button>
+
+          {selectedDashboardId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
-      </CardContent>
-    </Card>
+
+        <div className="flex items-center gap-2">
+          {saveStatus === "saving" && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Saving…
+            </div>
+          )}
+          {saveStatus === "saved" && (
+            <div className="flex items-center gap-1 text-xs text-emerald-500">
+              <Check className="h-3 w-3" />
+              Saved
+            </div>
+          )}
+
+          {isEditMode && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setWidgetPanelOpen(true)}
+              data-testid="add-widget-btn"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Add Widget
+            </Button>
+          )}
+
+          <Button
+            variant={isEditMode ? "default" : "outline"}
+            size="sm"
+            onClick={() => setIsEditMode((prev) => !prev)}
+            data-testid="edit-mode-toggle"
+            className="hidden min-[376px]:inline-flex"
+          >
+            {isEditMode ? (
+              <>
+                <Eye className="h-3.5 w-3.5 mr-1" />
+                View Mode
+              </>
+            ) : (
+              <>
+                <Pencil className="h-3.5 w-3.5 mr-1" />
+                Edit
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {localWidgets.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <LayoutGrid className="h-10 w-10 text-muted-foreground/40 mb-3" />
+            <p className="text-sm font-medium mb-1">No widgets yet</p>
+            <p className="text-xs text-muted-foreground mb-4">
+              Switch to edit mode and add widgets to build your dashboard.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsEditMode(true);
+                setWidgetPanelOpen(true);
+              }}
+              className="hidden min-[376px]:inline-flex"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Add Widget
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <ResponsiveGridLayout
+          className="layout"
+          layouts={gridLayouts}
+          breakpoints={{ lg: 1200, md: 996, sm: 0 }}
+          cols={{ lg: 12, md: 8, sm: 4 }}
+          rowHeight={60}
+          isDraggable={isEditMode}
+          isResizable={isEditMode}
+          onLayoutChange={handleLayoutChange}
+          draggableHandle=".react-grid-drag-handle"
+          compactType="vertical"
+          margin={[12, 12]}
+        >
+          {localWidgets.map((widget) => (
+            <div key={widget.id} className={cn(isEditMode && "react-grid-drag-handle")}>
+              <WidgetWrapper
+                id={widget.id}
+                type={widget.type}
+                config={widget.config}
+                isEditMode={isEditMode}
+                onDelete={removeWidget}
+              >
+                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                  <div className="text-center">
+                    <div className="mb-1">{WIDGET_META[widget.type]?.icon && (() => {
+                      const Icon = WIDGET_META[widget.type].icon;
+                      return <Icon className="h-6 w-6 mx-auto text-muted-foreground/40" />;
+                    })()}</div>
+                    <span className="text-xs">{WIDGET_META[widget.type]?.label ?? widget.type}</span>
+                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">Widget coming soon</p>
+                  </div>
+                </div>
+              </WidgetWrapper>
+            </div>
+          ))}
+        </ResponsiveGridLayout>
+      )}
+
+      <Sheet open={widgetPanelOpen} onOpenChange={setWidgetPanelOpen}>
+        <SheetContent side="right" className="w-80 sm:w-96 overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Add Widget</SheetTitle>
+            <SheetDescription>Choose a widget type to add to your dashboard.</SheetDescription>
+          </SheetHeader>
+          <div className="grid gap-2 mt-4">
+            {WIDGET_TYPES.map((type) => {
+              const meta = WIDGET_META[type];
+              const Icon = meta.icon;
+              return (
+                <button
+                  key={type}
+                  onClick={() => addWidget(type)}
+                  className="flex items-start gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-accent"
+                >
+                  <div className="rounded-md bg-muted p-2 shrink-0">
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">{meta.label}</div>
+                    <div className="text-xs text-muted-foreground">{meta.description}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Dashboard</DialogTitle>
+            <DialogDescription>Give your new dashboard a name.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="dashboard-name">Name</Label>
+            <Input
+              id="dashboard-name"
+              value={newDashboardName}
+              onChange={(e) => setNewDashboardName(e.target.value)}
+              placeholder="My Dashboard"
+              onKeyDown={(e) => e.key === "Enter" && handleCreateDashboard()}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateDashboard}
+              disabled={!newDashboardName.trim() || createMutation.isPending}
+            >
+              {createMutation.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Dashboard</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &quot;{currentDashboardName}&quot;? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteDashboard}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
