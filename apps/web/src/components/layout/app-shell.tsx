@@ -7,11 +7,13 @@ import {
   LayoutDashboard, Server, AlertTriangle, Network, Globe,
   FileText, Settings, Bell, Moon, Sun, LogOut,
   ChevronLeft, ChevronRight, Menu, User, Users, Brain,
+  ClipboardList, FileCode, ShieldAlert, Wrench, KeyRound,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useAuthStore, useNotificationStore, useSiteStore } from "@/stores";
 import { useState, useEffect } from "react";
 import { Separator } from "@/components/ui/separator";
+import { Breadcrumb } from "@/components/layout/breadcrumb";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -32,6 +34,7 @@ const navSections = [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/devices", label: "Devices", icon: Server },
       { href: "/incidents", label: "Incidents", icon: AlertTriangle },
+      { href: "/audit-logs", label: "Audit Logs", icon: ClipboardList },
     ],
   },
   {
@@ -39,11 +42,15 @@ const navSections = [
     items: [
       { href: "/topology", label: "Topology", icon: Network },
       { href: "/maps", label: "Geo Map", icon: Globe },
+      { href: "/config-snapshots", label: "Config Snapshots", icon: FileCode },
     ],
   },
   {
     label: "System",
     items: [
+      { href: "/alert-rules", label: "Alert Rules", icon: ShieldAlert },
+      { href: "/maintenance", label: "Maintenance Windows", icon: Wrench },
+      { href: "/api-keys", label: "API Keys", icon: KeyRound },
       { href: "/reports", label: "Reports", icon: FileText },
       { href: "/users", label: "Users", icon: Users },
       { href: "/ai", label: "AI Analysis", icon: Brain },
@@ -107,6 +114,7 @@ function SidebarNav({ collapsed, onToggle }: { collapsed: boolean; onToggle: () 
                   <Link
                     key={item.href}
                     href={item.href}
+                    data-testid={`nav-${item.href.slice(1)}`}
                     className={cn(
                       "group/item relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] transition-all duration-150",
                       isActive
@@ -162,8 +170,8 @@ function MobileSidebar() {
 
   return (
     <>
-      <button className="md:hidden p-1.5 hover:bg-accent rounded-md transition-colors" onClick={() => setOpen(true)}>
-        <Menu className="h-4 w-4" />
+      <button className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-accent rounded-md transition-colors" onClick={() => setOpen(true)}>
+        <Menu className="h-5 w-5" />
       </button>
       {open && (
         <div className="fixed inset-0 z-50 md:hidden">
@@ -206,8 +214,9 @@ function MobileSidebar() {
                           key={item.href}
                           href={item.href}
                           onClick={() => setOpen(false)}
+                          data-testid={`nav-${item.href.slice(1)}`}
                           className={cn(
-                            "relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] transition-all duration-150",
+                            "relative flex items-center gap-2.5 rounded-md px-2.5 py-2.5 min-h-[44px] text-[13px] transition-all duration-150",
                             isActive
                               ? "bg-primary/15 text-primary font-medium"
                               : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
@@ -259,7 +268,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-1 ml-auto">
             {/* Theme toggle */}
             <button
-              className="relative p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors overflow-hidden"
+              className="relative min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors overflow-hidden"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             >
               <Sun className={cn(
@@ -275,7 +284,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {/* Notifications */}
             <Popover>
               <PopoverTrigger asChild>
-                <button className="relative p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                <button className="relative min-h-[44px] min-w-[44px] flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
                   <Bell className="h-4 w-4" />
                   {unreadCount > 0 && (
                     <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground animate-in zoom-in-50 duration-200">
@@ -353,7 +362,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
             {/* User menu */}
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-accent transition-colors outline-none group">
+              <DropdownMenuTrigger className="flex items-center gap-2 rounded-md px-2 py-1 min-h-[44px] hover:bg-accent transition-colors outline-none group">
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-primary ring-1 ring-primary/20 group-hover:ring-primary/50 transition-all">
                   <User className="h-3.5 w-3.5" />
                 </div>
@@ -383,7 +392,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-5">
+        <div className="border-b border-border/60 bg-card/30 px-5 py-2">
+          <Breadcrumb />
+        </div>
+
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-5">
           {children}
         </main>
       </div>
