@@ -8,6 +8,7 @@ import { scaleOrdinal } from "@visx/scale";
 import { useTooltip } from "@visx/tooltip";
 import { apiFetch, cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useDashboardContextStore } from "@/stores/dashboard-context";
 import type { WidgetProps, HoneycombConfig } from "../types";
 
 interface Device {
@@ -44,6 +45,7 @@ function hexPath(cx: number, cy: number, r: number): string {
 export function HoneycombWidget({ id, config }: WidgetProps) {
   const cfg = config as HoneycombConfig;
   const router = useRouter();
+  const setSelectedHost = useDashboardContextStore((s) => s.setSelectedHost);
   const cellSize = cfg.cellSize || 28;
   const [containerRef, setContainerRef] = useState<HTMLDivElement | null>(null);
 
@@ -110,7 +112,10 @@ export function HoneycombWidget({ id, config }: WidgetProps) {
                   stroke="var(--border)"
                   strokeWidth={1}
                   className="cursor-pointer transition-opacity hover:opacity-80"
-                  onClick={() => router.push(`/devices/${device.id}`)}
+                  onClick={() => {
+                    setSelectedHost(device.id);
+                    router.push(`/devices/${device.id}`);
+                  }}
                   onMouseEnter={(e) => {
                     const rect = (e.target as SVGElement).ownerSVGElement?.getBoundingClientRect();
                     if (rect) {

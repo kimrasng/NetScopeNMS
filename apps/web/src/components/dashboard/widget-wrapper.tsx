@@ -1,11 +1,13 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import { Settings, Trash2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { WidgetErrorBoundary, SkeletonLoader } from "@/components/shared";
+import { useDashboardContextStore } from "@/stores/dashboard-context";
 import type { WidgetType, WidgetConfig } from "./types";
 import { getWidget } from "./widget-registry";
 
@@ -18,6 +20,8 @@ interface WidgetWrapperProps {
   isLoading?: boolean;
   timeRange?: string;
   selectedHost?: string;
+  broadcastContext?: boolean;
+  listenContext?: boolean;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   children?: ReactNode;
@@ -32,12 +36,24 @@ export function WidgetWrapper({
   isLoading = false,
   timeRange,
   selectedHost,
+  broadcastContext = false,
+  listenContext = false,
   onEdit,
   onDelete,
   children,
 }: WidgetWrapperProps) {
   const entry = getWidget(type);
   const WidgetComponent = entry?.component;
+  const queryClient = useQueryClient();
+  const contextHostId = useDashboardContextStore((s) => s.selectedHostId);
+
+  // When listenContext is true, invalidate queries on host change
+  useEffect(() => {
+    if (!listenContext || contextHostId === null) return;
+    queryClient.invalidateQueries({ queryKey: ["metrics"] });
+  }, [listenContext, contextHostId, queryClient]);
+
+  const effectiveHost = listenContext && contextHostId ? contextHostId : selectedHost;
 
   const displayTitle =
     title ?? (config as { title?: string }).title ?? type;
@@ -83,7 +99,7 @@ export function WidgetWrapper({
                   type={type}
                   config={config}
                   timeRange={timeRange}
-                  selectedHost={selectedHost}
+                  selectedHost={effectiveHost}
                 />
               ) : (
                 <div className="flex items-center justify-center h-full text-sm text-muted-foreground">

@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch, cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart } from "@/components/charts/line-chart";
+import { useDashboardContextStore } from "@/stores/dashboard-context";
 import type { WidgetProps, TimeSeriesConfig, TimeRange } from "../types";
 
 const TIME_RANGES: { label: string; value: TimeRange }[] = [
@@ -49,12 +50,13 @@ interface MetricsResponse {
   meta: { deviceId: string; metric: string; from: string; to: string; bucket: string };
 }
 
-export function TimeSeriesWidget({ id, config }: WidgetProps) {
+export function TimeSeriesWidget({ id, config, selectedHost }: WidgetProps) {
   const cfg = config as TimeSeriesConfig;
   const [range, setRange] = useState<TimeRange>((cfg.timeRange as TimeRange) || "1h");
+  const contextHostId = useDashboardContextStore((s) => s.selectedHostId);
 
   const { from, bucket } = rangeToParams(range);
-  const deviceId = cfg.deviceId || "";
+  const deviceId = contextHostId ?? selectedHost ?? cfg.deviceId ?? "";
 
   const { data, isLoading } = useQuery({
     queryKey: ["metrics", deviceId, cfg.metricName, range],
