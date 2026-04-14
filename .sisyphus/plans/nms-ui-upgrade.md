@@ -254,7 +254,7 @@ Max Concurrent: 8 (Wave 1)
 
 ## TODOs
 
-- [ ] 1. 프론트엔드 테스트 인프라 설정 (Vitest + Playwright)
+- [x] 1. 프론트엔드 테스트 인프라 설정 (Vitest + Playwright)
 
   **What to do**:
   - `apps/web`에 Vitest 설정: `vitest.config.ts` 생성, jsdom 환경, `@testing-library/react` + `@testing-library/jest-dom` 설치
@@ -327,7 +327,7 @@ Max Concurrent: 8 (Wave 1)
   - Files: `apps/web/vitest.config.ts`, `apps/web/playwright.config.ts`, `apps/web/src/__tests__/sample.test.tsx`, `apps/web/e2e/sample.spec.ts`, `apps/web/package.json`
   - Pre-commit: `cd apps/web && npx vitest run`
 
-- [ ] 2. React Query 도입 + QueryClientProvider
+- [x] 2. React Query 도입 + QueryClientProvider
 
   **What to do**:
   - `@tanstack/react-query` + `@tanstack/react-query-devtools` 설치
@@ -403,7 +403,7 @@ Max Concurrent: 8 (Wave 1)
   - Files: `apps/web/src/lib/query-client.ts`, `apps/web/src/components/providers/query-provider.tsx`, `apps/web/src/app/layout.tsx`, `apps/web/src/hooks/queries/use-dashboard.ts`, `apps/web/package.json`
   - Pre-commit: `cd apps/web && npx tsc --noEmit`
 
-- [ ] 3. useSocket() 활성화 + React Query 캐시 무효화 연동
+- [x] 3. useSocket() 활성화 + React Query 캐시 무효화 연동
 
   **What to do**:
   - `apps/web/src/app/(authenticated)/layout.tsx`에서 `useSocket()` 훅 import 및 호출
@@ -474,7 +474,7 @@ Max Concurrent: 8 (Wave 1)
   - Files: `apps/web/src/hooks/use-socket.ts`, `apps/web/src/app/(authenticated)/layout.tsx`
   - Pre-commit: `cd apps/web && npx tsc --noEmit`
 
-- [ ] 4. 공통 컴포넌트 추출 (DataTable, Pagination, FilterBar, EmptyState, ErrorBoundary)
+- [x] 4. 공통 컴포넌트 추출 (DataTable, Pagination, FilterBar, EmptyState, ErrorBoundary)
 
   **What to do**:
   - `apps/web/src/components/shared/` 디렉토리 생성
@@ -550,7 +550,7 @@ Max Concurrent: 8 (Wave 1)
   - Files: `apps/web/src/components/shared/*.tsx`, `apps/web/src/components/shared/index.ts`
   - Pre-commit: `cd apps/web && npx tsc --noEmit`
 
-- [ ] 5. 위젯 인터페이스 계약 + WidgetRegistry + 위젯 타입 정의
+- [x] 5. 위젯 인터페이스 계약 + WidgetRegistry + 위젯 타입 정의
 
   **What to do**:
   - `apps/web/src/components/dashboard/types.ts` 생성:
@@ -636,7 +636,7 @@ Max Concurrent: 8 (Wave 1)
   - Files: `apps/web/src/components/dashboard/types.ts`, `apps/web/src/components/dashboard/widget-registry.ts`, `apps/web/src/components/dashboard/widget-wrapper.tsx`
   - Pre-commit: `cd apps/web && npx tsc --noEmit`
 
-- [ ] 6. Nivo 테마 스파이크 + 차트 래퍼 컴포넌트
+- [x] 6. Nivo 테마 스파이크 + 차트 래퍼 컴포넌트
 
   **What to do**:
   - `@nivo/core`, `@nivo/line`, `@nivo/pie`, `@nivo/bar` 설치
@@ -721,7 +721,7 @@ Max Concurrent: 8 (Wave 1)
   - Files: `apps/web/src/components/charts/*.tsx`, `apps/web/src/components/charts/nivo-theme.ts`, `apps/web/src/components/charts/index.ts`, `apps/web/package.json`
   - Pre-commit: `cd apps/web && npx tsc --noEmit`
 
-- [ ] 7. 백엔드 - dashboards/dashboard_widgets/topology_positions 스키마 + CRUD API
+- [x] 7. 백엔드 - dashboards/dashboard_widgets/topology_positions 스키마 + CRUD API
 
   **What to do**:
   - `packages/shared/src/schema/index.ts`에 3개 테이블 추가:
@@ -811,7 +811,7 @@ Max Concurrent: 8 (Wave 1)
   - Files: `packages/shared/src/schema/index.ts`, `apps/api/src/routes/dashboards.ts`, `apps/api/src/index.ts`, `packages/shared/drizzle/migrations/*`
   - Pre-commit: `cd apps/api && npx vitest run`
 
-- [ ] 8. 백엔드 - 기존 라우트에 logAudit() 와이어링 + config snapshot diff 엔드포인트
+- [x] 8. 백엔드 - 기존 라우트에 logAudit() 와이어링 + config snapshot diff 엔드포인트
 
   **What to do**:
   - 기존 CRUD 라우트에 `logAudit()` 호출 추가:
@@ -886,7 +886,7 @@ Max Concurrent: 8 (Wave 1)
   - Files: `apps/api/src/routes/devices.ts`, `apps/api/src/routes/incidents.ts`, `apps/api/src/routes/alert-rules.ts`, `apps/api/src/routes/notifications.ts`, `apps/api/src/routes/maintenance-windows.ts`, `apps/api/src/routes/setup.ts`, `apps/api/src/routes/config-snapshots.ts`
   - Pre-commit: `cd apps/api && npx vitest run`
 
-- [ ] 9. 대시보드 프레임워크 (react-grid-layout, 위젯 추가/제거/리사이즈, 저장/로드)
+- [x] 9. 대시보드 프레임워크 (react-grid-layout, 위젯 추가/제거/리사이즈, 저장/로드)
 
   **What to do**:
   - apps/web/src/app/(authenticated)/dashboard/page.tsx 완전 재구축
@@ -975,7 +975,7 @@ Max Concurrent: 8 (Wave 1)
   - Files: apps/web/src/app/(authenticated)/dashboard/page.tsx, apps/web/src/components/dashboard/*
   - Pre-commit: cd apps/web && npx tsc --noEmit
 
-- [ ] 10. 위젯 - 통계 카드 (StatCardWidget)
+- [x] 10. 위젯 - 통계 카드 (StatCardWidget)
 
   **What to do**:
   - apps/web/src/components/dashboard/widgets/stat-card-widget.tsx 생성
@@ -1022,7 +1022,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add stat card widget
   - Files: apps/web/src/components/dashboard/widgets/stat-card-widget.tsx
 
-- [ ] 11. 위젯 - 시계열 그래프 (TimeSeriesWidget, Nivo Line)
+- [x] 11. 위젯 - 시계열 그래프 (TimeSeriesWidget, Nivo Line)
 
   **What to do**:
   - apps/web/src/components/dashboard/widgets/time-series-widget.tsx 생성
@@ -1070,7 +1070,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add time-series widget with Nivo Line
   - Files: apps/web/src/components/dashboard/widgets/time-series-widget.tsx
 
-- [ ] 12. 위젯 - 파이/도넛 차트 (PieChartWidget, Nivo Pie)
+- [x] 12. 위젯 - 파이/도넛 차트 (PieChartWidget, Nivo Pie)
 
   **What to do**:
   - apps/web/src/components/dashboard/widgets/pie-chart-widget.tsx 생성
@@ -1111,7 +1111,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add pie/donut chart widget with Nivo Pie
   - Files: apps/web/src/components/dashboard/widgets/pie-chart-widget.tsx
 
-- [ ] 13. Alert Rules CRUD 페이지
+- [x] 13. Alert Rules CRUD 페이지
 
   **What to do**:
   - apps/web/src/app/(authenticated)/alert-rules/page.tsx 생성
@@ -1173,7 +1173,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add alert rules management page
   - Files: apps/web/src/app/(authenticated)/alert-rules/page.tsx, apps/web/src/hooks/queries/use-alert-rules.ts
 
-- [ ] 14. Audit Logs 뷰어 페이지
+- [x] 14. Audit Logs 뷰어 페이지
 
   **What to do**:
   - apps/web/src/app/(authenticated)/audit-logs/page.tsx 생성
@@ -1220,7 +1220,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add audit logs viewer page
   - Files: apps/web/src/app/(authenticated)/audit-logs/page.tsx, apps/web/src/hooks/queries/use-audit-logs.ts
 
-- [ ] 15. Config Snapshots 뷰어 + diff 페이지
+- [x] 15. Config Snapshots 뷰어 + diff 페이지
 
   **What to do**:
   - apps/web/src/app/(authenticated)/config-snapshots/page.tsx 생성
@@ -1270,7 +1270,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add config snapshots viewer with diff
   - Files: apps/web/src/app/(authenticated)/config-snapshots/page.tsx, apps/web/src/hooks/queries/use-config-snapshots.ts
 
-- [ ] 16. Maintenance Windows CRUD 페이지
+- [x] 16. Maintenance Windows CRUD 페이지
 
   **What to do**:
   - apps/web/src/app/(authenticated)/maintenance/page.tsx 생성
@@ -1319,7 +1319,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add maintenance windows management page
   - Files: apps/web/src/app/(authenticated)/maintenance/page.tsx, apps/web/src/hooks/queries/use-maintenance-windows.ts
 
-- [ ] 17. API Keys 관리 페이지
+- [x] 17. API Keys 관리 페이지
 
   **What to do**:
   - apps/web/src/app/(authenticated)/api-keys/page.tsx 생성
@@ -1371,7 +1371,7 @@ Max Concurrent: 8 (Wave 1)
   - Files: apps/web/src/app/(authenticated)/api-keys/page.tsx, apps/web/src/hooks/queries/use-api-keys.ts
 
 
-- [ ] 18. 위젯 - Top N 바 차트 (TopNBarWidget, Nivo Bar)
+- [x] 18. 위젯 - Top N 바 차트 (TopNBarWidget, Nivo Bar)
 
   **What to do**:
   - apps/web/src/components/dashboard/widgets/top-n-bar-widget.tsx 생성
@@ -1412,7 +1412,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add Top N bar chart widget
   - Files: apps/web/src/components/dashboard/widgets/top-n-bar-widget.tsx
 
-- [ ] 19. 위젯 - 알림 피드 (AlertFeedWidget)
+- [x] 19. 위젯 - 알림 피드 (AlertFeedWidget)
 
   **What to do**:
   - apps/web/src/components/dashboard/widgets/alert-feed-widget.tsx 생성
@@ -1457,7 +1457,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add alert feed widget
   - Files: apps/web/src/components/dashboard/widgets/alert-feed-widget.tsx
 
-- [ ] 20. 위젯 - 상태 그리드/허니콤 (HoneycombWidget, Visx)
+- [x] 20. 위젯 - 상태 그리드/허니콤 (HoneycombWidget, Visx)
 
   **What to do**:
   - apps/web/src/components/dashboard/widgets/honeycomb-widget.tsx 생성
@@ -1506,7 +1506,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add honeycomb status grid widget with Visx
   - Files: apps/web/src/components/dashboard/widgets/honeycomb-widget.tsx
 
-- [ ] 21. 위젯 - 지도 미니맵 (MapWidget, Leaflet)
+- [x] 21. 위젯 - 지도 미니맵 (MapWidget, Leaflet)
 
   **What to do**:
   - apps/web/src/components/dashboard/widgets/map-widget.tsx 생성
@@ -1548,7 +1548,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add map minimap widget with Leaflet
   - Files: apps/web/src/components/dashboard/widgets/map-widget.tsx
 
-- [ ] 22. 위젯 - 토폴로지 미니맵 (TopologyWidget, ReactFlow)
+- [x] 22. 위젯 - 토폴로지 미니맵 (TopologyWidget, ReactFlow)
 
   **What to do**:
   - apps/web/src/components/dashboard/widgets/topology-widget.tsx 생성
@@ -1594,7 +1594,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add topology minimap widget
   - Files: apps/web/src/components/dashboard/widgets/topology-widget.tsx
 
-- [ ] 23. 위젯 - 시스템 정보 (SystemInfoWidget)
+- [x] 23. 위젯 - 시스템 정보 (SystemInfoWidget)
 
   **What to do**:
   - apps/web/src/components/dashboard/widgets/system-info-widget.tsx 생성
@@ -1635,7 +1635,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add system info widget
   - Files: apps/web/src/components/dashboard/widgets/system-info-widget.tsx
 
-- [ ] 24. 위젯 - AI 요약 (AISummaryWidget)
+- [x] 24. 위젯 - AI 요약 (AISummaryWidget)
 
   **What to do**:
   - apps/web/src/components/dashboard/widgets/ai-summary-widget.tsx 생성
@@ -1681,7 +1681,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add AI summary widget
   - Files: apps/web/src/components/dashboard/widgets/ai-summary-widget.tsx
 
-- [ ] 25. 토폴로지 웨더맵 업그레이드 (트래픽 색상, 대역폭 라벨, 노드 위치 저장, 배경 이미지)
+- [x] 25. 토폴로지 웨더맵 업그레이드 (트래픽 색상, 대역폭 라벨, 노드 위치 저장, 배경 이미지)
 
   **What to do**:
   - apps/web/src/app/(authenticated)/topology/page.tsx 대폭 업그레이드
@@ -1755,7 +1755,7 @@ Max Concurrent: 8 (Wave 1)
   - Files: apps/web/src/app/(authenticated)/topology/page.tsx, apps/web/src/hooks/queries/use-topology.ts
 
 
-- [ ] 26. 위젯 간 통신 시스템 (Zustand 호스트/시간범위 스토어, 위젯 구독)
+- [x] 26. 위젯 간 통신 시스템 (Zustand 호스트/시간범위 스토어, 위젯 구독)
 
   **What to do**:
   - apps/web/src/stores/dashboard-context.ts 생성:
@@ -1807,7 +1807,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add widget-to-widget communication via Zustand context store
   - Files: apps/web/src/stores/dashboard-context.ts, apps/web/src/components/dashboard/widget-wrapper.tsx, apps/web/src/components/dashboard/types.ts
 
-- [ ] 27. 대시보드 공유 + 빌트인 템플릿 3개 (Overview, Network, Alerts)
+- [x] 27. 대시보드 공유 + 빌트인 템플릿 3개 (Overview, Network, Alerts)
 
   **What to do**:
   - 대시보드 공유:
@@ -1860,7 +1860,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add dashboard sharing and built-in templates
   - Files: apps/web/src/components/dashboard/templates/*.ts, apps/web/src/app/(authenticated)/dashboard/page.tsx
 
-- [ ] 28. 기존 페이지 차트 Nivo 마이그레이션 - Dashboard 페이지
+- [x] 28. 기존 페이지 차트 Nivo 마이그레이션 - Dashboard 페이지
 
   **What to do**:
   - apps/web/src/app/(authenticated)/dashboard/page.tsx에서 Recharts 제거
@@ -1902,7 +1902,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: refactor(web): migrate dashboard charts from Recharts to Nivo
   - Files: apps/web/src/app/(authenticated)/dashboard/page.tsx
 
-- [ ] 29. 기존 페이지 차트 Nivo 마이그레이션 - Device Detail 페이지
+- [x] 29. 기존 페이지 차트 Nivo 마이그레이션 - Device Detail 페이지
 
   **What to do**:
   - apps/web/src/app/(authenticated)/devices/[id]/page.tsx에서 Recharts 제거
@@ -1947,7 +1947,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: refactor(web): migrate device detail charts from Recharts to Nivo
   - Files: apps/web/src/app/(authenticated)/devices/[id]/page.tsx
 
-- [ ] 30. 차트 고급 기능 (줌/팬, 다중 메트릭 오버레이, CSV 내보내기, 95th percentile)
+- [x] 30. 차트 고급 기능 (줌/팬, 다중 메트릭 오버레이, CSV 내보내기, 95th percentile)
 
   **What to do**:
   - apps/web/src/components/charts/line-chart.tsx 확장:
@@ -2013,7 +2013,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): add chart zoom, pan, multi-metric overlay, CSV export, 95th percentile
   - Files: apps/web/src/components/charts/line-chart.tsx, apps/web/src/components/charts/chart-utils.ts
 
-- [ ] 31. Recharts 의존성 제거 + 번들 정리
+- [x] 31. Recharts 의존성 제거 + 번들 정리
 
   **What to do**:
   - ast_grep_search로 전체 코드베이스에서 recharts import 검색
@@ -2058,7 +2058,7 @@ Max Concurrent: 8 (Wave 1)
   - Files: apps/web/package.json, yarn.lock
 
 
-- [ ] 32. 전체 UI 데이터 밀도 개선 - Dashboard, Devices, Incidents 페이지
+- [x] 32. 전체 UI 데이터 밀도 개선 - Dashboard, Devices, Incidents 페이지
 
   **What to do**:
   - 데이터 밀도 높이기 (Zabbix 스타일):
@@ -2117,7 +2117,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: style(web): improve data density on dashboard, devices, incidents pages
   - Files: apps/web/src/app/(authenticated)/dashboard/page.tsx, devices/page.tsx, incidents/page.tsx, globals.css
 
-- [ ] 33. 전체 UI 데이터 밀도 개선 - 나머지 페이지
+- [x] 33. 전체 UI 데이터 밀도 개선 - 나머지 페이지
 
   **What to do**:
   - T32와 동일한 데이터 밀도 개선을 나머지 페이지에 적용:
@@ -2167,7 +2167,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: style(web): improve data density on remaining pages
   - Files: apps/web/src/app/(authenticated)/*/page.tsx, apps/web/src/components/shared/*.tsx
 
-- [ ] 34. 모바일 반응형 개선 - 사이드바 드로어, 테이블 카드 전환, 대시보드 view-only
+- [x] 34. 모바일 반응형 개선 - 사이드바 드로어, 테이블 카드 전환, 대시보드 view-only
 
   **What to do**:
   - 사이드바 모바일 드로어 개선:
@@ -2236,7 +2236,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: style(web): improve mobile responsiveness across all pages
   - Files: apps/web/src/components/layout/app-shell.tsx, apps/web/src/components/shared/data-table.tsx, apps/web/src/app/(authenticated)/dashboard/page.tsx, globals.css
 
-- [ ] 35. 앱 셸 개선 - 브레드크럼, 사이드바 메뉴 추가
+- [x] 35. 앱 셸 개선 - 브레드크럼, 사이드바 메뉴 추가
 
   **What to do**:
   - 사이드바에 새 페이지 메뉴 항목 추가:
@@ -2286,7 +2286,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: feat(web): update app shell with new menu items and breadcrumb navigation
   - Files: apps/web/src/components/layout/app-shell.tsx, apps/web/src/components/layout/breadcrumb.tsx
 
-- [ ] 36. 프론트엔드 유닛 테스트 - 공통 컴포넌트 + 위젯 + 훅
+- [x] 36. 프론트엔드 유닛 테스트 - 공통 컴포넌트 + 위젯 + 훅
 
   **What to do**:
   - T1에서 설정한 Vitest 인프라 사용
@@ -2342,7 +2342,7 @@ Max Concurrent: 8 (Wave 1)
   - Message: test(web): add unit tests for shared components, widgets, and hooks
   - Files: apps/web/src/__tests__/*.test.tsx, apps/web/src/components/**/__tests__/*.test.tsx
 
-- [ ] 37. E2E 테스트 - Playwright 주요 플로우
+- [x] 37. E2E 테스트 - Playwright 주요 플로우
 
   **What to do**:
   - T1에서 설정한 Playwright 인프라 사용
@@ -2399,19 +2399,19 @@ Max Concurrent: 8 (Wave 1)
 
 > 4 review agents run in PARALLEL. ALL must APPROVE. Present consolidated results to user and get explicit "okay" before completing.
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
+- [x] F1. **Plan Compliance Audit** — `oracle`
   Read the plan end-to-end. For each "Must Have": verify implementation exists (read file, curl endpoint, run command). For each "Must NOT Have": search codebase for forbidden patterns — reject with file:line if found. Check evidence files exist in .sisyphus/evidence/. Compare deliverables against plan.
   Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
 
-- [ ] F2. **Code Quality Review** — `unspecified-high`
+- [x] F2. **Code Quality Review** — `unspecified-high`
   Run `tsc --noEmit` + linter + `bun test`. Review all changed files for: `as any`/`@ts-ignore`, empty catches, console.log in prod, commented-out code, unused imports. Check AI slop: excessive comments, over-abstraction, generic names (data/result/item/temp). Verify Recharts fully removed from package.json and no imports remain.
   Output: `Build [PASS/FAIL] | Lint [PASS/FAIL] | Tests [N pass/N fail] | Files [N clean/N issues] | VERDICT`
 
-- [ ] F3. **Real Manual QA** — `unspecified-high` (+ `playwright` skill)
+- [x] F3. **Real Manual QA** — `unspecified-high` (+ `playwright` skill)
   Start from clean state. Execute EVERY QA scenario from EVERY task — follow exact steps, capture evidence. Test cross-task integration (dashboard with all 10 widgets, widget communication, topology weathermap). Test edge cases: empty state, invalid input, rapid actions, mobile viewport. Save to `.sisyphus/evidence/final-qa/`.
   Output: `Scenarios [N/N pass] | Integration [N/N] | Edge Cases [N tested] | VERDICT`
 
-- [ ] F4. **Scope Fidelity Check** — `deep`
+- [x] F4. **Scope Fidelity Check** — `deep`
   For each task: read "What to do", read actual diff (git log/diff). Verify 1:1 — everything in spec was built (no missing), nothing beyond spec was built (no creep). Check "Must NOT do" compliance. Detect cross-task contamination. Verify no i18n, no custom themes, no public status page, no mobile-specific components, no more than 10 widget types.
   Output: `Tasks [N/N compliant] | Contamination [CLEAN/N issues] | Unaccounted [CLEAN/N files] | VERDICT`
 
