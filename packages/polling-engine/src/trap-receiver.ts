@@ -71,7 +71,7 @@ export class TrapReceiver extends EventEmitter {
         community: this.config.community,
         disableAuthorization: this.config.disableAuthorization,
       },
-      (error, notification) => {
+      (error: Error | null, notification: snmp.TrapNotification) => {
         if (error) {
           this.emit("error", error);
           return;
@@ -114,7 +114,7 @@ export class TrapReceiver extends EventEmitter {
 
     const version = this.detectVersion(pdu.type);
     const oid = this.extractTrapOid(pdu, version);
-    const varbinds = pdu.varbinds.map((vb) => ({
+    const varbinds = pdu.varbinds.map((vb: snmp.Varbind) => ({
       oid: vb.oid,
       type: vb.type,
       value: vb.value,
@@ -172,7 +172,7 @@ export class TrapReceiver extends EventEmitter {
     }
 
     // v2c/v3: look for snmpTrapOID.0 in varbinds
-    const trapOidVb = pdu.varbinds.find((vb) => vb.oid === SNMP_TRAP_OID);
+    const trapOidVb = pdu.varbinds.find((vb: snmp.Varbind) => vb.oid === SNMP_TRAP_OID);
     if (trapOidVb && typeof trapOidVb.value === "string") {
       return trapOidVb.value;
     }
