@@ -1,0 +1,10 @@
+node_modules
+dist
+.next
+.env
+*.log
+.turbo
+coverage
+.DS_Store
+.sisyphus
+!.sisyphus/plans/

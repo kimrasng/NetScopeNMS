@@ -1,0 +1,35 @@
+{
+  "name": "netpulse",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NetPulse - Network Management System",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npx turbo run dev",
+    "build": "npx turbo run build",
+    "dev:api": "yarn workspace @netpulse/api dev",
+    "dev:web": "yarn workspace @netpulse/web dev",
+    "db:generate": "yarn workspace @netpulse/api db:generate",
+    "db:migrate": "yarn workspace @netpulse/api db:migrate",
+    "db:seed": "yarn workspace @netpulse/api db:seed",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "npx turbo run lint",
+    "clean": "npx turbo run clean"
+  },
+  "keywords": [
+    "nms",
+    "network-monitoring"
+  ],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "yarn@1.22.22",
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  }
+}
