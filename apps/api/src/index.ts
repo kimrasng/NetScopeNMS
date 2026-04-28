@@ -9,6 +9,7 @@ import fastifyJwt from "@fastify/jwt";
 import { createVerifier } from "fast-jwt";
 import { Server } from "socket.io";
 import { createDb } from "@netpulse/shared";
+import { startPollingEngine } from "@netpulse/polling-engine";
 import { config } from "./config.js";
 import { deviceRoutes } from "./routes/devices.js";
 import { authRoutes } from "./routes/auth.js";
@@ -164,6 +165,18 @@ async function main() {
   await app.listen({ port: config.apiPort, host: "0.0.0.0" });
   app.log.info(`NetPulse API running on port ${config.apiPort}`);
   app.log.info(`Swagger docs at http://localhost:${config.apiPort}/docs`);
+
+  try {
+    const engine = startPollingEngine({
+      redisUrl: config.redisUrl,
+      databaseUrl: config.databaseUrl,
+      concurrency: 10,
+    });
+    await engine.schedulePolling();
+    app.log.info("Polling engine started");
+  } catch (err) {
+    app.log.error({ err }, "Failed to start polling engine");
+  }
 }
 
 main().catch((err) => {

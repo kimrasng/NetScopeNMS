@@ -29,20 +29,21 @@ async function seed() {
 
   // Create sample devices
   const sampleDevices = [
-    { name: "core-rtr-01", ip: "10.0.0.1", type: "router" as const, location: "Seoul DC1", latitude: 37.5665, longitude: 126.978, groupId: coreGroup?.id, snmpVersion: "v2c" as const, snmpCommunity: "public", status: "up" as const },
-    { name: "core-sw-01", ip: "10.0.0.2", type: "switch" as const, location: "Seoul DC1", latitude: 37.5665, longitude: 126.978, groupId: coreGroup?.id, snmpVersion: "v2c" as const, snmpCommunity: "public", status: "up" as const },
-    { name: "core-sw-02", ip: "10.0.0.3", type: "switch" as const, location: "Seoul DC1", latitude: 37.5665, longitude: 126.978, groupId: coreGroup?.id, snmpVersion: "v2c" as const, snmpCommunity: "public", status: "up" as const },
-    { name: "web-srv-01", ip: "10.0.1.10", type: "server" as const, location: "Seoul DC1", latitude: 37.5665, longitude: 126.978, groupId: serverGroup?.id, status: "up" as const },
-    { name: "web-srv-02", ip: "10.0.1.11", type: "server" as const, location: "Seoul DC1", latitude: 37.5665, longitude: 126.978, groupId: serverGroup?.id, status: "up" as const },
-    { name: "db-srv-01", ip: "10.0.1.20", type: "server" as const, location: "Seoul DC1", latitude: 37.5665, longitude: 126.978, groupId: serverGroup?.id, status: "up" as const },
-    { name: "edge-fw-01", ip: "10.0.2.1", type: "firewall" as const, location: "Busan DC2", latitude: 35.1796, longitude: 129.0756, groupId: edgeGroup?.id, snmpVersion: "v2c" as const, snmpCommunity: "public", status: "up" as const },
-    { name: "edge-rtr-01", ip: "10.0.2.2", type: "router" as const, location: "Busan DC2", latitude: 35.1796, longitude: 129.0756, groupId: edgeGroup?.id, snmpVersion: "v2c" as const, snmpCommunity: "public", status: "warning" as const },
-    { name: "ap-01", ip: "10.0.3.1", type: "access_point" as const, location: "Seoul Office", latitude: 37.5326, longitude: 127.0246, status: "up" as const },
-    { name: "nas-01", ip: "10.0.1.30", type: "storage" as const, location: "Seoul DC1", latitude: 37.5665, longitude: 126.978, groupId: serverGroup?.id, status: "up" as const },
+    { name: "core-router-01", ip: "10.100.0.11", type: "router" as const, location: "Seoul DC Rack A3", latitude: 37.5665, longitude: 126.978, groupId: coreGroup?.id, snmpVersion: "v2c" as const, snmpCommunity: "public", snmpPort: 161, status: "up" as const },
+    { name: "core-router-02", ip: "10.100.0.12", type: "router" as const, location: "Seoul DC Rack B1", latitude: 37.5665, longitude: 126.978, groupId: coreGroup?.id, snmpVersion: "v2c" as const, snmpCommunity: "public", snmpPort: 161, status: "up" as const },
+    { name: "dist-switch-01", ip: "10.100.0.13", type: "switch" as const, location: "Seoul DC Rack C2", latitude: 37.5665, longitude: 126.978, groupId: coreGroup?.id, snmpVersion: "v2c" as const, snmpCommunity: "public", snmpPort: 161, status: "up" as const },
+    { name: "dist-switch-02", ip: "10.100.0.14", type: "switch" as const, location: "Seoul DC Rack D1", latitude: 37.5665, longitude: 126.978, groupId: coreGroup?.id, snmpVersion: "v2c" as const, snmpCommunity: "public", snmpPort: 161, status: "unknown" as const },
+    { name: "web-server-01", ip: "10.100.0.15", type: "server" as const, location: "Seoul DC Rack E1", latitude: 37.5665, longitude: 126.978, groupId: serverGroup?.id, snmpVersion: "v2c" as const, snmpCommunity: "public", snmpPort: 161, status: "up" as const },
+    { name: "db-server-01", ip: "10.100.0.16", type: "server" as const, location: "Seoul DC Rack E2", latitude: 37.5665, longitude: 126.978, groupId: serverGroup?.id, snmpVersion: "v2c" as const, snmpCommunity: "public", snmpPort: 161, status: "maintenance" as const },
+    { name: "fw-main-01", ip: "10.100.0.17", type: "firewall" as const, location: "Seoul DC Rack A1", latitude: 37.5665, longitude: 126.978, groupId: edgeGroup?.id, snmpVersion: "v2c" as const, snmpCommunity: "public", snmpPort: 161, status: "warning" as const },
+    { name: "ap-floor1-01", ip: "10.100.0.19", type: "access_point" as const, location: "Seoul Office 3F", latitude: 37.5326, longitude: 127.0246, snmpVersion: "v2c" as const, snmpCommunity: "public", snmpPort: 161, pollingEnabled: false, status: "down" as const },
+    { name: "lb-frontend-01", ip: "10.100.0.18", type: "load_balancer" as const, location: "Seoul DC Rack A2", latitude: 37.5665, longitude: 126.978, groupId: edgeGroup?.id, snmpVersion: "v2c" as const, snmpCommunity: "public", snmpPort: 161, status: "up" as const },
+    { name: "nas-backup-01", ip: "10.100.0.20", type: "storage" as const, location: "Seoul DC Rack F1", latitude: 37.5665, longitude: 126.978, groupId: serverGroup?.id, snmpVersion: "v2c" as const, snmpCommunity: "public", snmpPort: 161, pollingEnabled: false, status: "down" as const },
   ];
 
+  await db.delete(devices);
   for (const d of sampleDevices) {
-    await db.insert(devices).values(d).onConflictDoNothing();
+    await db.insert(devices).values(d);
   }
   console.log(`Created ${sampleDevices.length} sample devices`);
 

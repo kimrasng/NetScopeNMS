@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Box from "@cloudscape-design/components/box";
 import Button from "@cloudscape-design/components/button";
 import Container from "@cloudscape-design/components/container";
 import Form from "@cloudscape-design/components/form";
@@ -12,9 +11,11 @@ import Input from "@cloudscape-design/components/input";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import Alert from "@cloudscape-design/components/alert";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { I18nProvider, useI18n } from "@/lib/i18n";
 import { apiGet } from "@/lib/api";
 
 function LoginForm() {
+  const { t } = useI18n();
   const { login } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -30,7 +31,7 @@ function LoginForm() {
       await login(email, password);
       router.push("/dashboard");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : t("auth.loginFailed"));
     } finally {
       setLoading(false);
     }
@@ -41,20 +42,20 @@ function LoginForm() {
       <form onSubmit={handleSubmit}>
         <Form
           header={
-            <Header variant="h1" description="AI-Powered Network Management System">
+            <Header variant="h1" description={t("auth.subtitle")}>
               NetPulse
             </Header>
           }
           actions={
             <Button variant="primary" loading={loading} formAction="submit">
-              Sign in
+              {t("auth.signIn")}
             </Button>
           }
         >
           <Container>
             <SpaceBetween size="l">
               {error && <Alert type="error">{error}</Alert>}
-              <FormField label="Email">
+              <FormField label={t("auth.email")}>
                 <Input
                   type="email"
                   value={email}
@@ -62,7 +63,7 @@ function LoginForm() {
                   placeholder="admin@netpulse.io"
                 />
               </FormField>
-              <FormField label="Password">
+              <FormField label={t("auth.password")}>
                 <Input
                   type="password"
                   value={password}
@@ -81,14 +82,14 @@ function LoginPageInner() {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
 
-  useState(() => {
+  useEffect(() => {
     apiGet<{ needsSetup: boolean }>("/api/setup/status")
       .then((res) => {
         if (res.needsSetup) router.replace("/setup");
         else setChecking(false);
       })
       .catch(() => setChecking(false));
-  });
+  }, [router]);
 
   if (checking) return null;
   return <LoginForm />;
@@ -97,7 +98,9 @@ function LoginPageInner() {
 export default function LoginPage() {
   return (
     <AuthProvider>
-      <LoginPageInner />
+      <I18nProvider>
+        <LoginPageInner />
+      </I18nProvider>
     </AuthProvider>
   );
 }

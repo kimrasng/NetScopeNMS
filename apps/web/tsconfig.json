@@ -10,6 +10,7 @@
     "paths": {
       "@/*": ["./src/*"]
     },
+    "rootDir": ".",
     "allowJs": true,
     "noEmit": true,
     "incremental": true,

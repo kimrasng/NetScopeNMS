@@ -1,69 +1,74 @@
 "use client";
 
 import SideNavigation, { type SideNavigationProps } from "@cloudscape-design/components/side-navigation";
-import Badge from "@cloudscape-design/components/badge";
 import { usePathname, useRouter } from "next/navigation";
-
-const NAV_ITEMS: SideNavigationProps["items"] = [
-  {
-    type: "section",
-    text: "Monitoring",
-    items: [
-      { type: "link", text: "Dashboard", href: "/dashboard" },
-      { type: "link", text: "Devices", href: "/devices" },
-      { type: "link", text: "Incidents", href: "/incidents" },
-      { type: "link", text: "Topology", href: "/topology" },
-    ],
-  },
-  {
-    type: "section",
-    text: "Network",
-    items: [
-      { type: "link", text: "Metrics", href: "/metrics" },
-      { type: "link", text: "Maps", href: "/maps" },
-    ],
-  },
-  {
-    type: "section",
-    text: "Operations",
-    items: [
-      { type: "link", text: "Alert Rules", href: "/alert-rules" },
-      { type: "link", text: "Notifications", href: "/notifications" },
-      { type: "link", text: "Maintenance", href: "/maintenance" },
-      { type: "link", text: "Config Snapshots", href: "/config-snapshots" },
-    ],
-  },
-  {
-    type: "section",
-    text: "Intelligence",
-    items: [
-      { type: "link", text: "AI Assistant", href: "/ai" },
-      { type: "link", text: "Reports", href: "/reports" },
-    ],
-  },
-  { type: "divider" },
-  {
-    type: "section",
-    text: "Administration",
-    items: [
-      { type: "link", text: "Users", href: "/settings/users" },
-      { type: "link", text: "Site Settings", href: "/settings/site" },
-      { type: "link", text: "API Keys", href: "/settings/api-keys" },
-      { type: "link", text: "Audit Logs", href: "/settings/audit-logs" },
-      { type: "link", text: "Dashboards", href: "/dashboards" },
-    ],
-  },
-];
+import { useI18n } from "@/lib/i18n";
+import { useSite } from "@/lib/site";
 
 export function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useI18n();
+  const { siteName } = useSite();
+
+  const navItems: SideNavigationProps["items"] = [
+    {
+      type: "section",
+      text: t("nav.monitoring"),
+      items: [
+        { type: "link", text: t("nav.dashboard"), href: "/dashboard" },
+        { type: "link", text: t("nav.devices"), href: "/devices" },
+        { type: "link", text: t("nav.incidents"), href: "/incidents" },
+        { type: "link", text: t("nav.topology"), href: "/topology" },
+      ],
+    },
+    {
+      type: "section",
+      text: t("nav.network"),
+      items: [
+        { type: "link", text: t("nav.metrics"), href: "/metrics" },
+        { type: "link", text: t("nav.maps"), href: "/maps" },
+      ],
+    },
+    {
+      type: "section",
+      text: t("nav.operations"),
+      items: [
+        { type: "link", text: t("nav.alertRules"), href: "/alert-rules" },
+        { type: "link", text: t("nav.notifications"), href: "/notifications" },
+        { type: "link", text: t("nav.maintenance"), href: "/maintenance" },
+        { type: "link", text: t("nav.configSnapshots"), href: "/config-snapshots" },
+      ],
+    },
+    {
+      type: "section",
+      text: t("nav.intelligence"),
+      items: [
+        { type: "link", text: t("nav.ai"), href: "/ai" },
+        { type: "link", text: t("nav.reports"), href: "/reports" },
+      ],
+    },
+    { type: "divider" },
+    {
+      type: "section",
+      text: t("nav.administration"),
+      items: [
+        { type: "link", text: t("nav.users"), href: "/settings/users" },
+        { type: "link", text: t("nav.siteSettings"), href: "/settings/site" },
+        { type: "link", text: t("nav.apiKeys"), href: "/settings/api-keys" },
+        { type: "link", text: t("nav.auditLogs"), href: "/settings/audit-logs" },
+        { type: "link", text: t("nav.dashboards"), href: "/dashboards" },
+        { type: "link", text: t("nav.profile"), href: "/settings/profile" },
+        { type: "link", text: t("nav.preferences"), href: "/settings/preferences" },
+      ],
+    },
+  ];
 
   return (
     <SideNavigation
-      header={{ href: "/dashboard", text: "NetPulse" }}
+      header={{ href: "/dashboard", text: siteName }}
       activeHref={pathname}
-      items={NAV_ITEMS}
+      items={navItems}
       onFollow={(event) => {
         event.preventDefault();
         router.push(event.detail.href);

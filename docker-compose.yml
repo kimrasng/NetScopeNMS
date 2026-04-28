@@ -53,6 +53,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - default
+      - snmpnet
 
   web:
     build:
@@ -68,6 +71,93 @@ services:
     depends_on:
       - api
 
+  snmpsim-router01:
+    image: tandrup/snmpsim
+    container_name: netpulse-snmpsim-router01
+    restart: unless-stopped
+    volumes:
+      - ./snmpsim/devices/public:/usr/local/snmpsim/data
+    networks:
+      snmpnet:
+        ipv4_address: 10.100.0.11
+
+  snmpsim-router02:
+    image: tandrup/snmpsim
+    container_name: netpulse-snmpsim-router02
+    restart: unless-stopped
+    volumes:
+      - ./snmpsim/devices/router02:/usr/local/snmpsim/data
+    networks:
+      snmpnet:
+        ipv4_address: 10.100.0.12
+
+  snmpsim-switch01:
+    image: tandrup/snmpsim
+    container_name: netpulse-snmpsim-switch01
+    restart: unless-stopped
+    volumes:
+      - ./snmpsim/devices/switch01:/usr/local/snmpsim/data
+    networks:
+      snmpnet:
+        ipv4_address: 10.100.0.13
+
+  snmpsim-switch02:
+    image: tandrup/snmpsim
+    container_name: netpulse-snmpsim-switch02
+    restart: unless-stopped
+    volumes:
+      - ./snmpsim/devices/switch02:/usr/local/snmpsim/data
+    networks:
+      snmpnet:
+        ipv4_address: 10.100.0.14
+
+  snmpsim-webserver01:
+    image: tandrup/snmpsim
+    container_name: netpulse-snmpsim-webserver01
+    restart: unless-stopped
+    volumes:
+      - ./snmpsim/devices/webserver01:/usr/local/snmpsim/data
+    networks:
+      snmpnet:
+        ipv4_address: 10.100.0.15
+
+  snmpsim-dbserver01:
+    image: tandrup/snmpsim
+    container_name: netpulse-snmpsim-dbserver01
+    restart: unless-stopped
+    volumes:
+      - ./snmpsim/devices/dbserver01:/usr/local/snmpsim/data
+    networks:
+      snmpnet:
+        ipv4_address: 10.100.0.16
+
+  snmpsim-firewall01:
+    image: tandrup/snmpsim
+    container_name: netpulse-snmpsim-firewall01
+    restart: unless-stopped
+    volumes:
+      - ./snmpsim/devices/firewall01:/usr/local/snmpsim/data
+    networks:
+      snmpnet:
+        ipv4_address: 10.100.0.17
+
+  snmpsim-lb01:
+    image: tandrup/snmpsim
+    container_name: netpulse-snmpsim-lb01
+    restart: unless-stopped
+    volumes:
+      - ./snmpsim/devices/lb01:/usr/local/snmpsim/data
+    networks:
+      snmpnet:
+        ipv4_address: 10.100.0.18
+
 volumes:
   pgdata:
   redisdata:
+
+networks:
+  snmpnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.100.0.0/24

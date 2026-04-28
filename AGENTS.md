@@ -1,5 +1,31 @@
 # NetPulse — Project Conventions
 
+## Workflow — Planning First (MANDATORY)
+
+Before implementing ANY feature or change, you MUST go through a planning conversation with the user:
+
+1. **Receive request** — User describes what they want
+2. **Ask questions** — Use interactive question prompts to clarify:
+   - Scope: What exactly is included/excluded?
+   - Design decisions: Which approach among alternatives?
+   - Priority: What to build first if multi-step?`
+   - Constraints: Any specific requirements or limitations?
+3. **Present plan** — Summarize the agreed plan back to the user
+4. **Get confirmation** — Wait for explicit "go ahead" before writing any code
+5. **Implement** — Only then start coding
+
+**DO NOT** skip the planning phase. Even for seemingly simple tasks, confirm scope first.
+**DO NOT** start writing code while still gathering requirements.
+
+This applies to all AI agents working on this project.
+
+## Language — Korean (MANDATORY)
+
+All communication with the user MUST be in **Korean (한국어)**.
+- Questions, plans, summaries, explanations — all in Korean
+- Code, comments, variable names, commit messages — remain in English
+- AGENTS.md and documentation files — remain in English
+
 ## Overview
 
 NetPulse is an AI-powered Network Management System (NMS). Turborepo monorepo with Yarn 1.22 workspaces.

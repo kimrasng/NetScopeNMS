@@ -278,8 +278,15 @@ export function startPollingEngine(cfg: PollingConfig) {
       }
     }
 
-    // Update device status
-    const newStatus = result.reachable ? "up" : "down";
+    const protectedStatuses = ["warning", "unknown", "maintenance"];
+    const [currentDevice] = await db.select({ status: devices.status })
+      .from(devices)
+      .where(eq(devices.id, result.deviceId));
+
+    const newStatus = (currentDevice && protectedStatuses.includes(currentDevice.status))
+      ? currentDevice.status
+      : (result.reachable ? "up" : "down");
+
     await db.update(devices)
       .set({ status: newStatus, lastPolledAt: new Date(), updatedAt: new Date() })
       .where(eq(devices.id, result.deviceId));
