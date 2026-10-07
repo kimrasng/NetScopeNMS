@@ -1,5 +1,6 @@
-import { pgTable, uuid, varchar, text, timestamp, boolean, jsonb, pgEnum, integer, real, unique } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { pgTable, uuid, varchar, text, timestamp, boolean, jsonb, pgEnum, integer, real, unique, uniqueIndex } from "drizzle-orm/pg-core";
+import type { SnmpV3Config } from "../types/snmp.js";
+import { relations, sql } from "drizzle-orm";
 
 // ─── Enums ───────────────────────────────────────────
 export const deviceTypeEnum = pgEnum("device_type", [
@@ -31,6 +32,7 @@ export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: varchar("email", { length: 255 }).notNull().unique(),
   passwordHash: text("password_hash"),
+  authVersion: integer("auth_version").notNull().default(0),
   name: varchar("name", { length: 255 }).notNull(),
   role: userRoleEnum("role").notNull().default("viewer"),
   phone: varchar("phone", { length: 50 }),
@@ -68,11 +70,12 @@ export const devices = pgTable("devices", {
   snmpVersion: snmpVersionEnum("snmp_version"),
   snmpCommunity: varchar("snmp_community", { length: 255 }),
   snmpPort: integer("snmp_port").default(161),
-  snmpV3Config: jsonb("snmp_v3_config"),
+  snmpV3Config: jsonb("snmp_v3_config").$type<SnmpV3Config>(),
   sshHost: varchar("ssh_host", { length: 255 }),
   sshPort: integer("ssh_port").default(22),
   sshUsername: varchar("ssh_username", { length: 255 }),
   sshKeyEncrypted: text("ssh_key_encrypted"),
+  sshHostFingerprint: varchar("ssh_host_fingerprint", { length: 100 }),
   location: varchar("location", { length: 500 }),
   latitude: real("latitude"),
   longitude: real("longitude"),
@@ -110,7 +113,7 @@ export const interfaces = pgTable("interfaces", {
   outErrors: integer("out_errors").default(0),
   lastUpdatedAt: timestamp("last_updated_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, table => [unique("interfaces_device_index_unique").on(table.deviceId, table.ifIndex)]);
 
 // ─── Metrics (TimescaleDB hypertable) ────────────────
 export const metrics = pgTable("metrics", {
@@ -157,13 +160,13 @@ export const incidents = pgTable("incidents", {
   metricValue: real("metric_value"),
   aiRca: text("ai_rca"),
   aiSummary: text("ai_summary"),
-  assignedTo: uuid("assigned_to").references(() => users.id),
-  acknowledgedBy: uuid("acknowledged_by").references(() => users.id),
+  assignedTo: uuid("assigned_to").references(() => users.id, { onDelete: "set null" }),
+  acknowledgedBy: uuid("acknowledged_by").references(() => users.id, { onDelete: "set null" }),
   acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, table => [uniqueIndex("incidents_active_rule_device_unique").on(table.deviceId, table.ruleId).where(sql`${table.status} <> 'resolved' AND ${table.ruleId} IS NOT NULL`)]);
 
 // ─── Incident Events ─────────────────────────────────
 export const incidentEvents = pgTable("incident_events", {
@@ -172,7 +175,7 @@ export const incidentEvents = pgTable("incident_events", {
   type: varchar("type", { length: 50 }).notNull(),
   message: text("message").notNull(),
   metadata: jsonb("metadata"),
-  createdBy: uuid("created_by").references(() => users.id),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -196,6 +199,9 @@ export const notifications = pgTable("notifications", {
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   payload: jsonb("payload"),
   error: text("error"),
+  dedupKey: varchar("dedup_key", { length: 255 }).unique(),
+  attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -218,14 +224,14 @@ export const reports = pgTable("reports", {
   period: varchar("period", { length: 50 }),
   content: jsonb("content"),
   aiSummary: text("ai_summary"),
-  generatedBy: uuid("generated_by").references(() => users.id),
+  generatedBy: uuid("generated_by").references(() => users.id, { onDelete: "set null" }),
   generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ─── Audit Log ───────────────────────────────────────
 export const auditLogs = pgTable("audit_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").references(() => users.id),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
   action: varchar("action", { length: 100 }).notNull(),
   resource: varchar("resource", { length: 100 }).notNull(),
   resourceId: varchar("resource_id", { length: 255 }),
@@ -245,7 +251,8 @@ export const maintenanceWindows = pgTable("maintenance_windows", {
   endAt: timestamp("end_at", { withTimezone: true }).notNull(),
   recurring: boolean("recurring").default(false),
   cronExpression: varchar("cron_expression", { length: 100 }),
-  createdBy: uuid("created_by").references(() => users.id),
+  timezone: varchar("timezone", { length: 100 }).notNull().default("UTC"),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -281,7 +288,7 @@ export const userInvitations = pgTable("user_invitations", {
   scope: varchar("scope", { length: 20 }).notNull().default("all"), // "all" | "restricted"
   allowedDeviceIds: jsonb("allowed_device_ids").$type<string[]>().default([]),
   allowedGroupIds: jsonb("allowed_group_ids").$type<string[]>().default([]),
-  invitedBy: uuid("invited_by").references(() => users.id),
+  invitedBy: uuid("invited_by").references(() => users.id, { onDelete: "set null" }),
   usedAt: timestamp("used_at", { withTimezone: true }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -334,6 +341,35 @@ export const topologyPositions = pgTable("topology_positions", {
 }, (table) => [
   unique("topology_positions_user_device_unique").on(table.userId, table.deviceId),
 ]);
+
+export const migrationArchives = pgTable("migration_archives", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sourceTable: varchar("source_table", { length: 100 }).notNull(),
+  sourceId: uuid("source_id").notNull(),
+  reason: text("reason").notNull(),
+  data: jsonb("data").notNull(),
+  archivedAt: timestamp("archived_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ─── Monitoring State ────────────────────────────────
+export const alertEvaluations = pgTable("alert_evaluations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  deviceId: uuid("device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
+  ruleId: uuid("rule_id").notNull().references(() => alertRules.id, { onDelete: "cascade" }),
+  failureCount: integer("failure_count").notNull().default(0),
+  firstFailureAt: timestamp("first_failure_at", { withTimezone: true }),
+  lastEvaluatedAt: timestamp("last_evaluated_at", { withTimezone: true }).notNull(),
+}, table => [unique("alert_evaluations_device_rule_unique").on(table.deviceId, table.ruleId)]);
+
+export const topologyEdges = pgTable("topology_edges", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sourceDeviceId: uuid("source_device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
+  targetDeviceId: uuid("target_device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
+  sourcePort: varchar("source_port", { length: 255 }).notNull().default(""),
+  targetPort: varchar("target_port", { length: 255 }),
+  discoveryMethod: varchar("discovery_method", { length: 20 }).notNull().default("manual"),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [unique("topology_edges_connection_unique").on(table.sourceDeviceId, table.targetDeviceId, table.sourcePort)]);
 
 // ─── Relations ───────────────────────────────────────
 export const devicesRelations = relations(devices, ({ one, many }) => ({

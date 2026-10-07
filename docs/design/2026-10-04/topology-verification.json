@@ -1,0 +1,15 @@
+{
+  "initial": {
+    "nodes": 55,
+    "visible": 55
+  },
+  "afterAutoLayout": {
+    "nodes": 55,
+    "visible": 55
+  },
+  "groupAfterSaveAndPolling": {
+    "nodes": 1,
+    "viewport": "transform: translate(-104.5px, -1163px) scale(1);",
+    "visible": 1
+  }
+}

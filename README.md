@@ -1,466 +1,155 @@
-<p align="center">
-  <h1 align="center">NetPulse</h1>
-  <p align="center">AI-Powered Network Management System</p>
-</p>
+# NetPulse
 
-<p align="center">
-  <a href="https://github.com/netpulse/netpulse/actions"><img src="https://github.com/netpulse/netpulse/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/license-ISC-blue.svg" alt="License: ISC">
-  <img src="https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg" alt="Node.js >= 22">
-  <img src="https://img.shields.io/badge/version-1.0.0-orange.svg" alt="Version 1.0.0">
-</p>
+NetPulse is a network management system with SNMP/ICMP polling, scoped monitoring, incident workflows, AI assistance, and multi-channel notifications.
 
-NetPulse is a full-stack network management system built for monitoring, alerting, and troubleshooting network infrastructure. It combines real-time SNMP/ICMP polling with AI-powered root cause analysis, multi-channel notifications, and interactive topology maps.
+## Implemented features
 
-## Features
+- **Devices and groups:** create/edit/delete, filtering and pagination, group assignment, coordinates, interface metrics, SNMP v1/v2c/v3 settings, and per-device SSH credentials. Existing masked secrets are preserved when an edit leaves them blank.
+- **Monitoring:** BullMQ polling schedules follow device changes. Ping and threshold events update device status. SNMP v2c uses the correct wire version, CPU utilization uses the host CPU table, and interfaces retain their actual `ifIndex`.
+- **Alerts:** device/group rules, notifications, escalation channels and delay, runbook links, flap suppression, acknowledgement, recovery, and incident timelines. Device and group filters on one rule both apply. Concurrent events cannot create duplicate active incidents for the same device/rule.
+- **Maintenance:** device/group scopes, one-time windows, recurring cron schedules with an explicit IANA timezone, and alert suppression during an active occurrence. Recurrence uses the original window duration.
+- **Traps and discovery:** normal API startup includes the UDP receiver, trap consumer, and scheduled LLDP/ARP discovery. Link-down traps create incidents; link-up traps resolve matching incidents. Discovery jobs can also run from the web page and persist neighbor relationships.
+- **Topology and maps:** ReactFlow graph with device status, zoom, dragging, automatic placement, saved personal positions and manual connections; Leaflet markers for devices with coordinates. Geographic tiles use OpenStreetMap and display a warning if unavailable.
+- **Dashboards:** system summary, throughput, top devices and incidents; custom dashboards with summary, metric, incidents, throughput, top-devices and text widgets. Editors can reorder widgets, choose widths and devices, and save a personal default dashboard. Shared dashboards respect the reader's device scope.
+- **AI:** enabled OpenAI, Gemini, Claude or custom providers configured in the UI; incident RCA/chat, scoped read-only SQL queries with displayed result rows, and narrative reports. Missing/failed providers produce errors instead of placeholder success.
+- **Reports:** manually generated availability, performance, alert-summary and AI-narrative reports. Availability is calculated from historical ping samples. Results are stored and available in the web list/detail view.
+- **Notifications:** SMTP, Telegram, Discord, Slack, Twilio SMS, PagerDuty, webhook and in-app channels. HTTP rejection is recorded as failure. Incident deliveries use a durable outbox with four total attempts and exponential backoff; channel-test requests record the immediate result. History includes status and errors. Telegram links open the incident; acknowledgement happens in NetPulse.
+- **Configuration snapshots:** manual content import or on-demand SSH command capture, SHA-256 change detection, history and line diffs. SSH capture verifies a configured SHA-256 host fingerprint and limits connection time/output. Automatic scheduled SSH backup is not implemented.
+- **Access and audit:** seven-day JWTs and expiring/revocable API keys; current account role, enablement and device/group scope enforced for API queries and Socket.IO events. Account/password changes revoke old sessions. Invitations enforce their bound email. Mutations are audited with credentials redacted.
+- **Web behavior:** filters/ranges refetch, monitoring events refresh displayed state, errors offer recovery, Viewer writes are disabled, profile phone persists, and site name/logo settings render in the header.
 
-### Device Management
-- Full CRUD for network devices (routers, switches, servers, firewalls, APs, load balancers, storage)
-- Device groups and tag-based organization
-- Geo-coordinates (latitude/longitude) for map placement
-- Interface discovery and tracking
-- Per-device metrics history
-- Scope-based access control per device/group
+## Stack and structure
 
-### Monitoring & Polling
-- SNMP v1/v2c/v3 polling with configurable intervals
-- ICMP ping monitoring
-- BullMQ-based distributed worker queues
-- Time-series metric storage with TimescaleDB `time_bucket` aggregation
-- Anomaly detection (2σ deviation from 7-day rolling average)
-- Linear trend extrapolation and threshold breach prediction
+The frontend uses Next.js 14, React 18, **AWS Cloudscape**, React Context, Recharts, ReactFlow and Leaflet. The backend uses Fastify 5, Socket.IO, Drizzle, Zod, BullMQ, Redis 7 and TimescaleDB/PostgreSQL 16. Yarn 1.22 workspaces and Turborepo coordinate the TypeScript packages.
 
-### SNMP Trap Receiver
-- Listens for SNMP v1/v2c/v3 traps
-- Automatic incident creation from trap events
-
-### Auto-Discovery
-- LLDP and ARP-based neighbor discovery
-- Automatic topology mapping from discovered relationships
-
-### Alerting & Incidents
-- Threshold-based alert rules with configurable operators (`>`, `>=`, `<`, `<=`, `==`, `!=`)
-- Flap detection with configurable threshold and window
-- Escalation timers with separate notification channels
-- Runbook URL attachment per rule
-- Full incident lifecycle: problem, acknowledged, resolved
-- Incident event timeline with comments
-- Auto-resolve on metric recovery
-- Real-time WebSocket updates via Socket.IO
-
-### AI Integration
-- Multi-provider support: OpenAI, Gemini, Claude, Custom endpoints
-- Root cause analysis (RCA) generation for incidents
-- Incident chat assistant with metric context
-- Natural language queries translated to safe, read-only SQL
-- AI narrative report generation
-- Provider management (add, test, set default)
-
-### Notifications
-- 7 notification channels: Email (SMTP), Telegram, Discord, Slack, SMS (Twilio), PagerDuty, Webhook
-- In-app notifications via WebSocket
-- Per-channel test dispatch
-- Notification history with send/fail status
-- Exponential backoff retry (3 attempts)
-
-### Dashboard
-- Real-time summary stats (device status counts, active incidents)
-- Aggregate throughput charts (bandwidth in/out)
-- Top N devices by metric (CPU, memory, etc.)
-- Recent alerts feed
-
-### Topology & Maps
-- Interactive network topology built with ReactFlow
-- Geographic device maps with Leaflet
-- Auto-layout from LLDP/ARP discovery data
-
-### Reports
-- Four report types: availability, performance, alert summary, AI narrative
-- Configurable periods: daily, weekly, monthly
-- AI-generated executive summaries with recommendations
-
-### Audit Logging
-- Tracks user actions across all resources
-- Filterable by user, action, resource, and date range
-
-### Config Snapshots
-- Device configuration backup and versioning
-- SHA-256 hash-based change detection
-- Line-by-line diff between snapshots
-
-### Maintenance Windows
-- Scheduled maintenance with start/end times
-- Device and group scoping
-- Recurring windows with cron expressions
-- Active/upcoming/past filtering
-
-### API Keys
-- User-scoped API key generation
-- SHA-256 hashed storage (raw key shown once)
-- Optional expiration dates
-
-### Authentication & RBAC
-- JWT-based authentication (7-day token expiry)
-- Four roles: `super_admin`, `admin`, `operator`, `viewer`
-- Scope-based access: `all` or `restricted` (per device/group)
-- Invitation-only user registration with token-based onboarding
-- Initial setup wizard for first admin account
-
-## Tech Stack
-
-### Frontend
-- Next.js 14 (App Router)
-- React 18
-- Tailwind CSS + shadcn/ui
-- Zustand (state management)
-- Recharts (charts and graphs)
-- ReactFlow (topology diagrams)
-- Leaflet (geographic maps)
-
-### Backend
-- Fastify 5 with TypeScript
-- Socket.IO (real-time WebSocket)
-- Drizzle ORM (type-safe queries)
-- BullMQ (job queues and workers)
-- Zod (request validation)
-- Swagger/OpenAPI auto-generated docs at `/docs`
-
-### Database
-- TimescaleDB (PostgreSQL 16 with time-series extensions)
-- Redis 7 (BullMQ job queues, caching)
-
-### Tooling
-- Turborepo (monorepo build orchestration)
-- Yarn 1.22 workspaces
-- Vitest (testing)
-- GitHub Actions (CI/CD)
-
-## Project Structure
-
-```
-netpulse/
-├── apps/
-│   ├── api/                  # @netpulse/api - Fastify backend (14 route modules)
-│   └── web/                  # @netpulse/web - Next.js frontend
-├── packages/
-│   ├── shared/               # @netpulse/shared - Drizzle ORM schema (17 tables), DB connection
-│   ├── polling-engine/       # @netpulse/polling-engine - SNMP/ICMP polling, trap receiver, auto-discovery
-│   ├── ai-engine/            # @netpulse/ai-engine - Multi-provider AI engine
-│   └── notification/         # @netpulse/notification - 7-channel notification dispatcher
-├── docker-compose.yml
-├── turbo.json
-└── package.json
+```text
+apps/api/                  Fastify API and application monitoring services
+apps/web/                  Next.js App Router and Cloudscape UI
+packages/shared/           Schema, migrations, contracts and database utilities
+packages/polling-engine/   SNMP/ICMP polling, traps and LLDP/ARP discovery
+packages/ai-engine/        Multi-provider AI adapters
+packages/notification/     Typed notification transport adapters
+scripts/                   Startup and disposable regression harnesses
 ```
 
-## Quick Start
+## Local setup
 
-### Prerequisites
-
-- Node.js 22 (LTS)
-- Yarn 1.22+
-- Docker and Docker Compose
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/netpulse/netpulse.git
-cd netpulse
-```
-
-### 2. Start infrastructure services
-
-```bash
-docker compose up -d postgres redis
-```
-
-This starts TimescaleDB on port 5432 and Redis on port 6379.
-
-### 3. Install dependencies
-
-```bash
-yarn install
-```
-
-### 4. Configure environment
+Use Node.js 22, Yarn 1.22.22, Docker and Docker Compose. From the repository root:
 
 ```bash
 cp .env.example .env
-```
-
-Edit `.env` with your settings. See [Environment Variables](#environment-variables) for details.
-
-### 5. Run database migrations
-
-```bash
+# Edit .env; replace NEXTAUTH_SECRET with a private random value.
+yarn install --frozen-lockfile
+docker compose up -d postgres redis
 yarn db:migrate
-```
-
-Optionally seed with sample data:
-
-```bash
+# Optional sample data; does not create an administrator.
 yarn db:seed
-```
-
-### 6. Start development servers
-
-```bash
 yarn dev
 ```
 
-This starts both the API server (http://localhost:4000) and the web app (http://localhost:3000) concurrently via Turborepo.
+Open http://localhost:3000 and complete the first-admin setup wizard. The API runs on http://localhost:4000; Swagger is at `/docs` and worker health is at `/api/health`. `yarn dev:api` and `yarn dev:web` start each application separately.
 
-You can also start them individually:
+The API, migration/seed tools and web configuration load root `.env` defaults. Injected environment variables and application-local overrides take precedence. Changes to the root environment file invalidate Turbo build caches. Sample seeding is idempotent, uses TEST-NET addresses with polling disabled, and rejects production execution.
+
+`yarn db:migrate` applies checked-in migrations and initializes the metrics hypertable, indexes and Timescale policies. Upgrades preserve historical metrics; conflicting legacy interface/incident rows are retained in `migration_archives`. Take a database backup before upgrading a real installation.
+
+## Docker
 
 ```bash
-yarn dev:api   # API only on port 4000
-yarn dev:web   # Web only on port 3000
+docker compose up -d --build api web
 ```
 
-### 7. Open the app
+The API image migrates before starting and runs its polling, threshold, delivery, discovery and trap workers. API/web healthchecks report readiness. Compose also defines eight optional-to-start SNMP simulator services; select them explicitly if needed. The command above starts API/web plus their database/Redis dependencies.
 
-Visit http://localhost:3000. On first launch, you'll see the setup wizard to create your admin account.
+| Service | Host port |
+| --- | --- |
+| TimescaleDB | 5432/TCP |
+| Redis | 6379/TCP |
+| API | 4000/TCP; 162/UDP for traps |
+| Web | 3000/TCP |
 
-API docs are available at http://localhost:4000/docs (Swagger UI).
+Set `NEXT_PUBLIC_API_URL` to the API URL reachable **from users' browsers**, and set `CORS_ORIGIN`/`WEB_ORIGIN` to the web origin. The browser API URL is compiled into the Docker web build through a build argument, so changing it requires rebuilding the web image. `NEXTAUTH_SECRET` is required by Compose.
 
-## Docker Deployment
+## Configuration
 
-Run the full stack with Docker Compose:
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `DATABASE_URL` | Timescale/PostgreSQL connection | local `netpulse` database |
+| `REDIS_URL` | BullMQ Redis connection | `redis://localhost:6379` |
+| `NEXTAUTH_SECRET` | JWT signing and SSH-key encryption | development fallback only |
+| `NEXT_PUBLIC_API_URL` | Browser API URL, set before building | `http://localhost:4000` |
+| `WEB_ORIGIN` | Invitation and notification links | `http://localhost:3000` |
+| `NEXTAUTH_URL` | Invitation-link fallback | `http://localhost:3000` |
+| `CORS_ORIGIN` | Allowed browser/socket origin | `http://localhost:3000` |
+| `API_PORT` | Direct API listening port | `4000` |
+| `LOG_LEVEL` | API logging level | `info` |
+| `SNMP_TRAP_ENABLED` | Start UDP trap receiver | `true` |
+| `SNMP_TRAP_PORT` | Direct receiver port | `1162` |
+| `SNMP_TRAP_COMMUNITY` | Accepted v1/v2c community | `public` |
+| `SNMP_TRAP_USERS` | JSON array of SNMPv3 USM users | `[]` |
+| `DISCOVERY_ENABLED` | Enable scheduled discovery | `true` |
+| `DISCOVERY_INTERVAL` | Discovery interval in seconds | `3600` |
+| `NODE_ENV` | Runtime mode | `development` |
 
-```bash
-docker compose up -d
-```
+Configure **AI providers and notification channels in the web UI**; legacy `ANTHROPIC_API_KEY`, `SMTP_*`, Telegram and other transport environment fields do not create usable providers/channels. Jira and Kakao adapters are not provided.
 
-This starts four services:
+SNMPv3 device/trap configuration includes `username`, `securityLevel` (`noAuthNoPriv`, `authNoPriv`, `authPriv`), `authProtocol` (`MD5`/`SHA`), `authKey`, `privProtocol` (`DES`/`AES`) and `privKey` as required by the selected level. Configure trap users explicitly; a device's polling credentials do not automatically register a trap user. Traps identify a device by source IP; use unique managed addresses. Docker always binds the receiver on container UDP 1162 and publishes host UDP 162.
 
-| Service    | Image                          | Port |
-|------------|--------------------------------|------|
-| `postgres` | timescale/timescaledb:latest-pg16 | 5432 |
-| `redis`    | redis:7-alpine                 | 6379 |
-| `api`      | Built from Dockerfile          | 4000 |
-| `web`      | Built from Dockerfile          | 3000 |
+SSH capture accepts a trusted `SHA256:...` base64 or hexadecimal host-key fingerprint. Obtain it through an independently trusted channel. Stored private keys are encrypted using the signing secret; rotating `NEXTAUTH_SECRET` requires re-entering stored SSH keys. Capture commands are device/vendor specific and run only when requested.
 
-Set `NEXTAUTH_SECRET` and `ANTHROPIC_API_KEY` in your environment or a `.env` file before running.
+## API conventions
 
-```bash
-docker compose down     # Stop all services
-docker compose logs -f  # Follow logs
-```
+All resource endpoints use `/api`. Authentication accepts a JWT or API key as a Bearer credential. Lists use `{ data, pagination: { page, limit, total, totalPages } }`; errors use `{ error, message? }`. Invalid bodies, identifiers, dates, coordinates and pagination return client errors. Secret fields are excluded from ordinary responses; configured flags let forms retain credentials.
 
-## API Endpoints
+Roles are `super_admin`, `admin`, `operator` and `viewer`. Device operations and incident actions require Operator or above. Global configuration requires an unrestricted administrator; user role/enablement updates and deletion require Super Admin. A restricted user's direct request for a hidden device returns 404. Resource scope applies to reports, dashboards, AI queries, snapshots and live events as well as device lists.
 
-All endpoints are prefixed with `/api`. Most require a JWT Bearer token.
+| Route group | Main operations |
+| --- | --- |
+| `/auth`, `/setup` | Login/profile/password, first setup, site settings, email-bound invites, account administration |
+| `/devices`, `/device-groups` | Devices, interface/history data and groups |
+| `/incidents`, `/alert-rules`, `/maintenance-windows` | Lifecycle, RCA, comments, alert and maintenance configuration |
+| `/dashboard`, `/dashboards` | System aggregates and custom layouts/widgets |
+| `/topology`, `/discovery` | Scoped graph, positions, connections and discovery jobs |
+| `/metrics` | Time series, anomalies and trend predictions |
+| `/ai`, `/reports` | Provider management, query/chat/RCA and report generation |
+| `/notifications` | Transport configuration, test send and paginated history |
+| `/config-snapshots` | Import, SSH capture, list/detail/diff |
+| `/api-keys`, `/audit-logs`, `/health` | Integration credentials, audit and worker readiness |
 
-### Auth (`/api/auth`)
+See running Swagger for exact methods and schemas. Shared Zod response contracts cover reports, notification history, invitations, metrics and AI query results; they are also validated by the web client.
 
-| Method | Path        | Description          | Auth     |
-|--------|-------------|----------------------|----------|
-| POST   | `/login`    | Login, get JWT token | Public   |
-| GET    | `/me`       | Get current user     | Required |
-| PUT    | `/profile`  | Update display name  | Required |
-| PUT    | `/password` | Change password      | Required |
-
-### Devices (`/api/devices`)
-
-| Method | Path                | Description              | Auth              |
-|--------|---------------------|--------------------------|-------------------|
-| GET    | `/`                 | List devices (paginated) | Required          |
-| GET    | `/:id`              | Get device with interfaces | Required        |
-| POST   | `/`                 | Create device            | Operator+         |
-| PUT    | `/:id`              | Update device            | Operator+         |
-| DELETE | `/:id`              | Delete device            | Admin+            |
-| GET    | `/:id/interfaces`   | Get device interfaces    | Required          |
-| GET    | `/:id/metrics`      | Get device metrics       | Required          |
-
-### Incidents (`/api/incidents`)
-
-| Method | Path                   | Description              | Auth     |
-|--------|------------------------|--------------------------|----------|
-| GET    | `/`                    | List incidents (paginated) | Required |
-| GET    | `/:id`                 | Get incident with events | Required |
-| POST   | `/:id/acknowledge`     | Acknowledge incident     | Required |
-| POST   | `/:id/resolve`         | Resolve incident         | Required |
-| POST   | `/:id/ai-analysis`     | Trigger AI analysis      | Required |
-| POST   | `/:id/comments`        | Add comment              | Required |
-
-### Dashboard (`/api/dashboard`)
-
-| Method | Path             | Description                    | Auth     |
-|--------|------------------|--------------------------------|----------|
-| GET    | `/summary`       | Device and incident counts     | Required |
-| GET    | `/top-devices`   | Top N devices by metric        | Required |
-| GET    | `/recent-alerts` | Recent incidents feed          | Required |
-| GET    | `/throughput`    | Aggregate bandwidth over time  | Required |
-
-### AI (`/api/ai`)
-
-| Method | Path                    | Description                | Auth     |
-|--------|-------------------------|----------------------------|----------|
-| POST   | `/query`                | Natural language query     | Required |
-| POST   | `/chat`                 | Incident chat assistant    | Required |
-| POST   | `/rca/:incidentId`      | Generate root cause analysis | Required |
-| GET    | `/providers`            | List AI providers          | Required |
-| POST   | `/providers`            | Add AI provider            | Admin+   |
-| PUT    | `/providers/:id`        | Update AI provider         | Admin+   |
-| DELETE | `/providers/:id`        | Delete AI provider         | Admin+   |
-| POST   | `/providers/:id/test`   | Test provider connection   | Admin+   |
-
-### Notifications (`/api/notifications`)
-
-| Method | Path                    | Description              | Auth     |
-|--------|-------------------------|--------------------------|----------|
-| GET    | `/channels`             | List notification channels | Required |
-| POST   | `/channels`             | Create channel           | Admin+   |
-| PUT    | `/channels/:id`         | Update channel           | Admin+   |
-| DELETE | `/channels/:id`         | Delete channel           | Admin+   |
-| POST   | `/test/:channelId`      | Test send notification   | Admin+   |
-| GET    | `/history`              | Notification history     | Required |
-
-### Metrics (`/api/metrics`)
-
-| Method | Path         | Description                          | Auth     |
-|--------|--------------|--------------------------------------|----------|
-| GET    | `/`          | Time-series query with bucketing     | Required |
-| GET    | `/anomalies` | Anomaly detection (2σ deviation)     | Required |
-| GET    | `/predict`   | Trend prediction and threshold ETA   | Required |
-
-### Alert Rules (`/api/alert-rules`)
-
-| Method | Path    | Description        | Auth     |
-|--------|---------|--------------------|----------|
-| GET    | `/`     | List alert rules   | Required |
-| GET    | `/:id`  | Get alert rule     | Required |
-| POST   | `/`     | Create alert rule  | Admin+   |
-| PUT    | `/:id`  | Update alert rule  | Admin+   |
-| DELETE | `/:id`  | Delete alert rule  | Admin+   |
-
-### Reports (`/api/reports`)
-
-| Method | Path        | Description                          | Auth     |
-|--------|-------------|--------------------------------------|----------|
-| GET    | `/`         | List generated reports               | Required |
-| GET    | `/:id`      | Get report details                   | Required |
-| POST   | `/generate` | Generate report (4 types available)  | Required |
-
-### Setup (`/api/setup`)
-
-| Method | Path              | Description                  | Auth        |
-|--------|-------------------|------------------------------|-------------|
-| GET    | `/status`         | Check if setup is needed     | Public      |
-| GET    | `/site`           | Get site settings            | Public      |
-| PUT    | `/site`           | Update site settings         | Admin+      |
-| POST   | `/init`           | Initial admin setup          | Public (once) |
-| POST   | `/invite`         | Create invitation link       | Admin+      |
-| GET    | `/invite/:token`  | Get invitation details       | Public      |
-| POST   | `/invite/accept`  | Accept invitation, register  | Public      |
-| GET    | `/invitations`    | List all invitations         | Admin+      |
-| GET    | `/users`          | List all users               | Admin+      |
-| DELETE | `/users/:id`      | Delete user                  | Super Admin |
-
-### Audit Logs (`/api/audit-logs`)
-
-| Method | Path   | Description              | Auth   |
-|--------|--------|--------------------------|--------|
-| GET    | `/`    | Query audit logs         | Admin+ |
-| GET    | `/:id` | Get audit log entry      | Admin+ |
-
-### Config Snapshots (`/api/config-snapshots`)
-
-| Method | Path   | Description                | Auth       |
-|--------|--------|----------------------------|------------|
-| GET    | `/`    | List snapshots (paginated) | Required   |
-| GET    | `/:id` | Get snapshot with config   | Required   |
-| POST   | `/`    | Create snapshot            | Operator+  |
-| DELETE | `/:id` | Delete snapshot            | Operator+  |
-
-### Maintenance Windows (`/api/maintenance-windows`)
-
-| Method | Path      | Description                  | Auth     |
-|--------|-----------|------------------------------|----------|
-| GET    | `/active` | Get currently active windows | Required |
-| GET    | `/`       | List windows (paginated)     | Required |
-| GET    | `/:id`    | Get window details           | Required |
-| POST   | `/`       | Create maintenance window    | Admin+   |
-| PUT    | `/:id`    | Update maintenance window    | Admin+   |
-| DELETE | `/:id`    | Delete maintenance window    | Admin+   |
-
-### API Keys (`/api/api-keys`)
-
-| Method | Path   | Description    | Auth     |
-|--------|--------|----------------|----------|
-| GET    | `/`    | List your keys | Required |
-| POST   | `/`    | Create API key | Required |
-| DELETE | `/:id` | Revoke API key | Required |
-
-### Health (`/api/health`)
-
-| Method | Path | Description  | Auth   |
-|--------|------|--------------|--------|
-| GET    | `/`  | Health check | Public |
-
-## Testing
-
-Tests run with Vitest. The suite includes 140 tests across 10 test files.
+## Verification
 
 ```bash
-# Run all tests
+yarn install --frozen-lockfile
 yarn test
-
-# Watch mode
-yarn test:watch
+yarn lint
+yarn build
 ```
 
-## CI/CD
+The unit suite includes API access, polling, notification adapters, recurrence and web request/refetch contracts. Database/network regression harnesses require **disposable local** services and create/change fixture data:
 
-GitHub Actions runs on every push and pull request to `main` and `develop`:
+```bash
+export TEST_API_URL=http://127.0.0.1:4000
+export TEST_DATABASE_URL=postgresql://netpulse:password@127.0.0.1:5432/netpulse_qa
+export TEST_REDIS_URL=redis://127.0.0.1:6379/1
+export TEST_OUTPUT_DIR=/tmp/netpulse-qa
+# Start the API using the same database and Redis, after yarn db:migrate.
+# The integration harness requires an empty users table and reserves local port 14567.
+yarn test:integration
+yarn test:monitoring
+yarn test:ssh
+yarn test:features
+# Uses the integration fixtures above, plus a running web and mock-services.mjs.
+yarn playwright install chromium
+yarn test:e2e
+# Override TEST_DATABASE_URL with a separate completely empty database first.
+yarn test:upgrade
+```
 
-1. Checkout code
-2. Setup Node.js 22
-3. Cache `node_modules` and Turbo build artifacts
-4. Install dependencies (`yarn install --frozen-lockfile`)
-5. Typecheck and build all packages (`yarn build`)
-6. Run test suite (`npx vitest run`)
+Monitoring reserves UDP 10161 and local webhook port 14568; SSH reserves TCP 12122. Set `TEST_TRAP_PORT` if the API receiver uses a port other than 1162. `state.json` contains private fixture credentials and must not be published; `*-results.json` are sanitized evidence. [The remediation report](docs/qa/2026-10-02/RETEST_REPORT.md) distinguishes executed checks from configured CI coverage and lists external validation limits.
 
-## Environment Variables
-
-Copy `.env.example` to `.env` and configure:
-
-| Variable              | Description                        | Default                                              |
-|-----------------------|------------------------------------|------------------------------------------------------|
-| `DATABASE_URL`        | PostgreSQL connection string       | `postgresql://netpulse:netpulse@localhost:5432/netpulse` |
-| `REDIS_URL`           | Redis connection string            | `redis://localhost:6379`                             |
-| `NEXTAUTH_SECRET`     | JWT signing secret                 | (change in production)                               |
-| `NEXTAUTH_URL`        | App base URL                       | `http://localhost:3000`                              |
-| `ANTHROPIC_API_KEY`   | Anthropic API key (for AI features)| -                                                    |
-| `SMTP_HOST`           | SMTP server host                   | `smtp.gmail.com`                                     |
-| `SMTP_PORT`           | SMTP server port                   | `587`                                                |
-| `SMTP_USER`           | SMTP username                      | -                                                    |
-| `SMTP_PASS`           | SMTP password                      | -                                                    |
-| `TELEGRAM_BOT_TOKEN`  | Telegram bot token                 | -                                                    |
-| `DISCORD_WEBHOOK_URL` | Discord webhook URL                | -                                                    |
-| `SLACK_WEBHOOK_URL`   | Slack webhook URL                  | -                                                    |
-| `TWILIO_SID`          | Twilio account SID                 | -                                                    |
-| `TWILIO_TOKEN`        | Twilio auth token                  | -                                                    |
-| `TWILIO_FROM`         | Twilio sender phone number         | -                                                    |
-| `PAGERDUTY_ROUTING_KEY` | PagerDuty routing key            | -                                                    |
-| `JIRA_URL`            | Jira instance URL                  | -                                                    |
-| `JIRA_EMAIL`          | Jira account email                 | -                                                    |
-| `JIRA_TOKEN`          | Jira API token                     | -                                                    |
-| `KAKAO_API_KEY`       | Kakao API key                      | -                                                    |
-| `KAKAO_SENDER_KEY`    | Kakao sender key                   | -                                                    |
-| `NODE_ENV`            | Environment mode                   | `development`                                        |
-| `API_PORT`            | API server port                    | `4000`                                               |
-| `WEB_PORT`            | Web server port                    | `3000`                                               |
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Make your changes
-4. Run tests (`yarn test`) and build (`yarn build`)
-5. Commit with a clear message
-6. Open a pull request against `develop`
-
-Please keep PRs focused on a single concern. Run `yarn lint` before submitting.
+GitHub Actions runs frozen installation, build, lint, unit tests, local API/UDP-SNMP/SSH regressions, Chromium E2E cases and legacy database upgrade checks on Node.js 22. Uploads are restricted to sanitized result files.
 
 ## License
 

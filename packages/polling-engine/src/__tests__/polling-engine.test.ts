@@ -255,7 +255,7 @@ describe("Polling Engine", () => {
       });
 
       expect(result.reachable).toBe(true);
-      const cpuMetric = result.metrics.find(m => m.name === "cpu");
+      const cpuMetric = result.metrics.find(m => m.name === "load_1m");
       expect(cpuMetric).toBeDefined();
       expect(cpuMetric!.value).toBe(45.2);
 
@@ -284,7 +284,7 @@ describe("Polling Engine", () => {
 
       let subtreeCallCount = 0;
       const subtreeFn1 = vi.fn((_oid: string, _max: number, feedCb: Function, doneCb: Function) => {
-        const datasets = [ifNames, ifStatuses, ifIn1, ifOut1];
+        const datasets = [[], ifNames, ifStatuses, ifIn1, ifOut1];
         feedCb(datasets[subtreeCallCount].map(v => ({ oid: v.oid, value: v.value })));
         subtreeCallCount++;
         doneCb(null);
@@ -310,7 +310,7 @@ describe("Polling Engine", () => {
 
       subtreeCallCount = 0;
       const subtreeFn2 = vi.fn((_oid: string, _max: number, feedCb: Function, doneCb: Function) => {
-        const datasets = [ifNames, ifStatuses, ifIn2, ifOut2];
+        const datasets = [[], ifNames, ifStatuses, ifIn2, ifOut2];
         feedCb(datasets[subtreeCallCount].map(v => ({ oid: v.oid, value: v.value })));
         subtreeCallCount++;
         doneCb(null);

@@ -207,7 +207,7 @@ describe("SNMPv3 Support", () => {
       expect(snmp.default.createV3Session).toHaveBeenCalled();
       expect(snmp.default.createSession).not.toHaveBeenCalled();
 
-      const cpuMetric = result.metrics.find(m => m.name === "cpu");
+      const cpuMetric = result.metrics.find(m => m.name === "load_1m");
       expect(cpuMetric).toBeDefined();
       expect(cpuMetric!.value).toBe(55.0);
 
@@ -271,7 +271,7 @@ describe("SNMPv3 Support", () => {
       expect(snmp.default.createSession).toHaveBeenCalled();
       expect(snmp.default.createV3Session).not.toHaveBeenCalled();
 
-      const cpuMetric = result.metrics.find(m => m.name === "cpu");
+      const cpuMetric = result.metrics.find(m => m.name === "load_1m");
       expect(cpuMetric).toBeDefined();
     });
 

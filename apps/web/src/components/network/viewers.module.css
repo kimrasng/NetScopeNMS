@@ -1,0 +1,2 @@
+.canvas { height: 60vh; min-height: 440px; max-height: 720px; width: 100%; }
+.node { width: 200px; white-space: pre-line; border-width: 2px; font-size: 14px; line-height: 1.5; }

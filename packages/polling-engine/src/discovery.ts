@@ -1,8 +1,9 @@
 import { Worker, Queue, Job } from "bullmq";
 import IORedis from "ioredis";
-import { createDb, devices } from "@netpulse/shared";
+import { createDb, devices, topologyEdges, snmpV3Schema, type SnmpV3Config } from "@netpulse/shared";
+import { isIP } from "node:net";
 import { eq } from "drizzle-orm";
-import { snmpWalk } from "./index.js";
+import { snmpWalk, snmpWalkWithSession, createSnmpV3Session } from "./index.js";
 
 const LLDP_OID = {
   remManAddr: "1.0.8802.1.1.2.1.4.2.1.4",
@@ -22,6 +23,7 @@ export interface DiscoveryConfig {
   databaseUrl: string;
   defaultSnmpCommunity?: string;
   discoveryInterval?: number;
+  onDiscovered?: (deviceIds: string[]) => Promise<void>;
 }
 
 export interface DiscoveryResult {
@@ -62,6 +64,7 @@ export class DiscoveryEngine {
   private redis: IORedis | null = null;
   private queue: Queue | null = null;
   private worker: Worker | null = null;
+  private client: ReturnType<typeof createDb>["client"] | null = null;
   private db: ReturnType<typeof createDb>["db"] | null = null;
 
   constructor(config: DiscoveryConfig) {
@@ -70,8 +73,9 @@ export class DiscoveryEngine {
 
   start() {
     this.redis = new IORedis(this.config.redisUrl, { maxRetriesPerRequest: null });
-    const { db } = createDb(this.config.databaseUrl);
+    const { db, client } = createDb(this.config.databaseUrl);
     this.db = db;
+    this.client = client;
 
     this.queue = new Queue("network-discovery", { connection: this.redis });
 
@@ -81,20 +85,19 @@ export class DiscoveryEngine {
         if (job.name === "full-discovery") {
           return this.runFullDiscovery();
         }
-        if (job.name === "device-discovery" && job.data?.device) {
-          return this.discoverFromDevice(job.data.device);
+        if (job.name === "device-discovery" && job.data?.deviceId) {
+          const device = await this.db!.query.devices.findFirst({ where: eq(devices.id, String(job.data.deviceId)) });
+          if (!device) throw new Error("Device not found");
+          return this.discoverFromDevice(device);
         }
       },
       { connection: this.redis },
     );
 
     const interval = (this.config.discoveryInterval || 3600) * 1000;
-    this.queue.add("full-discovery", {}, {
-      repeat: { every: interval },
-      jobId: "scheduled-full-discovery",
-      removeOnComplete: 50,
-      removeOnFail: 20,
-    });
+    void this.queue.upsertJobScheduler("scheduled-full-discovery", { every: interval }, {
+      name: "full-discovery", data: {}, opts: { removeOnComplete: 50, removeOnFail: 20 },
+    }).catch(error => console.error("Discovery scheduling failed", error));
 
     return { queue: this.queue, worker: this.worker };
   }
@@ -103,6 +106,7 @@ export class DiscoveryEngine {
     if (this.worker) await this.worker.close();
     if (this.queue) await this.queue.close();
     if (this.redis) this.redis.disconnect();
+    if (this.client) await this.client.end();
   }
 
   async runFullDiscovery(): Promise<DiscoveryResult[]> {
@@ -137,33 +141,39 @@ export class DiscoveryEngine {
     name: string;
     ip: string;
     snmpCommunity?: string | null;
+    snmpVersion?: string | null;
+    snmpV3Config?: SnmpV3Config | null;
+    groupId?: string | null;
     snmpPort?: number | null;
   }): Promise<DiscoveryResult> {
     if (!this.db) throw new Error("DiscoveryEngine not started");
 
     const community = device.snmpCommunity || this.config.defaultSnmpCommunity;
-    if (!community) {
+    if (device.snmpVersion === "v3" ? !device.snmpV3Config : !community) {
       return {
         sourceDeviceId: device.id,
         sourceDeviceName: device.name,
         neighborsFound: [],
         newDevicesCreated: 0,
         alreadyKnown: 0,
-        errors: ["No SNMP community configured"],
+        errors: [device.snmpVersion === "v3" ? "No SNMPv3 credentials configured" : "No SNMP community configured"],
       };
     }
 
     const port = device.snmpPort || 161;
+    const walk = (oid: string) => device.snmpVersion === "v3"
+      ? snmpWalkWithSession(createSnmpV3Session(device.ip, snmpV3Schema.parse(device.snmpV3Config), port), oid)
+      : snmpWalk(device.ip, community!, oid, port, device.snmpVersion === "v1" ? "v1" : "v2c");
     const errors: string[] = [];
     const neighborMap = new Map<string, DiscoveredNeighbor>();
 
     // ── LLDP ──────────────────────────────────────────
     try {
       const [addrResults, nameResults, descResults, portResults] = await Promise.all([
-        snmpWalk(device.ip, community, LLDP_OID.remManAddr, port),
-        snmpWalk(device.ip, community, LLDP_OID.remSysName, port),
-        snmpWalk(device.ip, community, LLDP_OID.remSysDesc, port),
-        snmpWalk(device.ip, community, LLDP_OID.remPortId, port),
+        walk(LLDP_OID.remManAddr),
+        walk(LLDP_OID.remSysName),
+        walk(LLDP_OID.remSysDesc),
+        walk(LLDP_OID.remPortId),
       ]);
 
       const nameMap = new Map<string, string>();
@@ -208,8 +218,8 @@ export class DiscoveryEngine {
     // ── ARP ───────────────────────────────────────────
     try {
       const [ipResults, macResults] = await Promise.all([
-        snmpWalk(device.ip, community, ARP_OID.ipNetToMediaNetAddress, port),
-        snmpWalk(device.ip, community, ARP_OID.ipNetToMediaPhysAddress, port),
+        walk(ARP_OID.ipNetToMediaNetAddress),
+        walk(ARP_OID.ipNetToMediaPhysAddress),
       ]);
 
       const macMap = new Map<string, string>();
@@ -248,7 +258,9 @@ export class DiscoveryEngine {
     let newDevicesCreated = 0;
     let alreadyKnown = 0;
 
+    const affected = new Set<string>([device.id]);
     for (const neighbor of neighbors) {
+      if (!isIP(neighbor.ip)) { errors.push("Invalid neighbor IP"); continue; }
       try {
         const existing = await this.db
           .select({ id: devices.id })
@@ -256,26 +268,34 @@ export class DiscoveryEngine {
           .where(eq(devices.ip, neighbor.ip))
           .limit(1);
 
+        let neighborId = existing[0]?.id;
         if (existing.length > 0) {
           alreadyKnown++;
           neighbor.isNew = false;
         } else {
           neighbor.isNew = true;
-          await this.db.insert(devices).values({
+          const [created] = await this.db.insert(devices).values({
             name: neighbor.hostname || `discovered-${neighbor.ip}`,
             ip: neighbor.ip,
             type: "other",
             status: "unknown",
-            snmpCommunity: this.config.defaultSnmpCommunity || null,
+            snmpCommunity: device.snmpVersion === "v3" ? null : community, snmpVersion: device.snmpVersion === "v3" ? "v3" : device.snmpVersion === "v1" ? "v1" : "v2c", snmpV3Config: device.snmpV3Config, snmpPort: port, groupId: device.groupId,
             pollingEnabled: true,
-          });
+          }).returning({ id: devices.id });
+          neighborId = created.id;
           newDevicesCreated++;
+        }
+        if (neighborId) {
+          affected.add(neighborId);
+          await this.db.insert(topologyEdges).values({ sourceDeviceId: device.id, targetDeviceId: neighborId, sourcePort: neighbor.sourcePort ?? "", discoveryMethod: neighbor.discoveryMethod })
+            .onConflictDoUpdate({ target: [topologyEdges.sourceDeviceId, topologyEdges.targetDeviceId, topologyEdges.sourcePort], set: { lastSeenAt: new Date(), discoveryMethod: neighbor.discoveryMethod } });
         }
       } catch (err) {
         errors.push(`DB error for ${neighbor.ip}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
+    if (this.config.onDiscovered) await this.config.onDiscovered([...affected]);
     return {
       sourceDeviceId: device.id,
       sourceDeviceName: device.name,

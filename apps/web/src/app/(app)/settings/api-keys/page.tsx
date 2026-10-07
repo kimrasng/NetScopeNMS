@@ -1,7 +1,7 @@
 "use client";
+import { formatDateTime, formatDate } from "@/lib/date-format";
 
 import { useState, useCallback } from "react";
-import ContentLayout from "@cloudscape-design/components/content-layout";
 import Header from "@cloudscape-design/components/header";
 import Table from "@cloudscape-design/components/table";
 import SpaceBetween from "@cloudscape-design/components/space-between";
@@ -35,6 +35,7 @@ export default function ApiKeysPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [keyName, setKeyName] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
+  const [formError, setFormError] = useState("");
   const [createLoading, setCreateLoading] = useState(false);
   const [rawKey, setRawKey] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
@@ -43,15 +44,16 @@ export default function ApiKeysPage() {
 
   const { items, collectionProps, filterProps, paginationProps } = useCollection(keys, {
     filtering: {
-      empty: <Box textAlign="center" color="inherit">No API keys</Box>,
-      noMatch: <Box textAlign="center" color="inherit">No matching keys</Box>,
+      empty: <Box textAlign="center" color="inherit">{t("No API keys")}</Box>,
+      noMatch: <Box textAlign="center" color="inherit">{t("No matching keys")}</Box>,
     },
     pagination: { pageSize: 20 },
     sorting: { defaultState: { sortingColumn: { sortingField: "createdAt" }, isDescending: true } },
   });
 
   const handleCreate = useCallback(async () => {
-    if (!keyName.trim()) return;
+    if (!keyName.trim()) { setFormError(t("Name is required.")); return; }
+    setFormError("");
     setCreateLoading(true);
     try {
       const result = await apiPost<CreateKeyResponse>("/api/api-keys", {
@@ -61,7 +63,7 @@ export default function ApiKeysPage() {
       setRawKey(result.rawKey);
       addNotification({ type: "success", content: t("apiKey.created") });
     } catch (err) {
-      addNotification({ type: "error", content: err instanceof Error ? err.message : "Failed to create API key." });
+      setFormError(err instanceof Error ? err.message : t("Failed to create API key."));
     } finally {
       setCreateLoading(false);
     }
@@ -89,17 +91,16 @@ export default function ApiKeysPage() {
   }, [rawKey, refetch]);
 
   return (
-    <ContentLayout header={<Header variant="h1">{t("page.apiKeys")}</Header>}>
+    <>
       <Table
         {...collectionProps}
         items={items}
         loading={loading}
-        loadingText="Loading API keys..."
+        loadingText={t("Loading API keys...")}
         variant="full-page"
         stickyHeader
         header={
-          <Header
-            variant="h2"
+          <Header variant="awsui-h1-sticky"
             counter={keys.length ? `(${keys.length})` : undefined}
             actions={
               <Button variant="primary" onClick={() => setShowCreateModal(true)}>
@@ -110,7 +111,7 @@ export default function ApiKeysPage() {
             {t("page.apiKeys")}
           </Header>
         }
-        filter={<TextFilter {...filterProps} filteringPlaceholder="Find keys" />}
+        filter={<TextFilter {...filterProps} filteringPlaceholder={t("Find keys")} />}
         pagination={<Pagination {...paginationProps} />}
         columnDefinitions={[
           {
@@ -129,21 +130,21 @@ export default function ApiKeysPage() {
           {
             id: "lastUsed",
             header: t("apiKey.lastUsed"),
-            cell: (item) => item.lastUsedAt ? new Date(item.lastUsedAt).toLocaleString() : "Never",
+            cell: (item) => item.lastUsedAt ? formatDateTime(new Date(item.lastUsedAt)) : t("Never"),
             sortingField: "lastUsedAt",
             width: 180,
           },
           {
             id: "expires",
             header: t("apiKey.expiresAt"),
-            cell: (item) => item.expiresAt ? new Date(item.expiresAt).toLocaleDateString() : "Never",
+            cell: (item) => item.expiresAt ? formatDate(new Date(item.expiresAt)) : t("Never"),
             sortingField: "expiresAt",
             width: 140,
           },
           {
             id: "created",
             header: t("common.createdAt"),
-            cell: (item) => new Date(item.createdAt).toLocaleDateString(),
+            cell: (item) => formatDate(new Date(item.createdAt)),
             sortingField: "createdAt",
             width: 120,
           },
@@ -165,8 +166,8 @@ export default function ApiKeysPage() {
         empty={
           <Box textAlign="center" color="inherit">
             <SpaceBetween size="m">
-              <b>No API keys</b>
-              <Box variant="p" color="inherit">Create an API key to get started.</Box>
+              <b>{t("No API keys")}</b>
+              <Box variant="p" color="inherit">{t("Create an API key to get started.")}</Box>
             </SpaceBetween>
           </Box>
         }
@@ -180,7 +181,7 @@ export default function ApiKeysPage() {
           <Box float="right">
             <SpaceBetween direction="horizontal" size="xs">
               <Button variant="link" onClick={closeCreateModal}>
-                {rawKey ? "Done" : t("common.cancel")}
+                {rawKey ? t("Done") : t("common.cancel")}
               </Button>
               {!rawKey && (
                 <Button
@@ -210,24 +211,23 @@ export default function ApiKeysPage() {
                 addNotification({ type: "success", content: "Copied to clipboard." });
               }}
             >
-              Copy Key
-            </Button>
+              {t("Copy Key")}</Button>
           </SpaceBetween>
         ) : (
-          <Form>
+          <Form errorText={formError}>
             <SpaceBetween size="m">
-              <FormField label={t("apiKey.name")} description="A descriptive name for this API key.">
+              <FormField label={t("apiKey.name")} description={t("A descriptive name for this API key.")}>
                 <Input
                   value={keyName}
                   onChange={({ detail }) => setKeyName(detail.value)}
-                  placeholder="My integration key"
+                  placeholder={t("My integration key")}
                 />
               </FormField>
-              <FormField label={t("apiKey.expiresAt")} description="Optional. Leave blank for no expiration.">
+              <FormField label={t("apiKey.expiresAt")} description={t("Optional. Leave blank for no expiration.")}>
                 <DatePicker
                   value={expiresAt}
                   onChange={({ detail }) => setExpiresAt(detail.value)}
-                  placeholder="YYYY/MM/DD"
+                  placeholder={t("YYYY/MM/DD")}
                   isDateEnabled={(date) => date.getTime() > Date.now()}
                 />
               </FormField>
@@ -235,6 +235,6 @@ export default function ApiKeysPage() {
           </Form>
         )}
       </Modal>
-    </ContentLayout>
+    </>
   );
 }

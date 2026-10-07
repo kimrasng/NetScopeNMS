@@ -1,0 +1,1 @@
+ALTER TABLE "devices" ADD COLUMN "ssh_host_fingerprint" varchar(100);

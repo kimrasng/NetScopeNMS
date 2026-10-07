@@ -1,7 +1,8 @@
 "use client";
+import { formatDateTime } from "@/lib/date-format";
 
-import { useState, useCallback } from "react";
-import Link from "next/link";
+import { useState, useCallback, useEffect } from "react";
+import Link from "@cloudscape-design/components/link";
 import { useRouter } from "next/navigation";
 import Table from "@cloudscape-design/components/table";
 import Header from "@cloudscape-design/components/header";
@@ -10,13 +11,15 @@ import Pagination from "@cloudscape-design/components/pagination";
 import TextFilter from "@cloudscape-design/components/text-filter";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import StatusIndicator from "@cloudscape-design/components/status-indicator";
-import ContentLayout from "@cloudscape-design/components/content-layout";
 import Box from "@cloudscape-design/components/box";
 import Badge from "@cloudscape-design/components/badge";
 import Select from "@cloudscape-design/components/select";
 import type { SelectProps } from "@cloudscape-design/components/select";
 import { useCollection } from "@cloudscape-design/collection-hooks";
+import { useTablePreferences } from "@/hooks/use-table-preferences";
 import { useApi } from "@/hooks/use-api";
+import { useAuth } from "@/lib/auth";
+import { canOperate } from "@/lib/permissions";
 import { useI18n } from "@/lib/i18n";
 import type { Device, DeviceType, DeviceStatus, PaginatedResponse } from "@/lib/types";
 
@@ -52,11 +55,12 @@ const STATUS_KEYS: { value: string; key: string }[] = [
 
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "—";
-  return new Date(dateStr).toLocaleString();
+  return formatDateTime(new Date(dateStr));
 }
 
 export default function DeviceListPage() {
   const { t } = useI18n();
+  const { user } = useAuth();
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
   const [filterText, setFilterText] = useState("");
@@ -68,6 +72,12 @@ export default function DeviceListPage() {
   const [typeFilter, setTypeFilter] = useState<SelectProps.Option>(deviceTypeOptions[0]);
   const [statusFilter, setStatusFilter] = useState<SelectProps.Option>(statusOptions[0]);
 
+  useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get("status");
+    const option = STATUS_KEYS.find(item => item.value === status);
+    if (option) setStatusFilter({ value: option.value, label: t(option.key) });
+  }, [t]);
+
   const params: Record<string, string | number | undefined> = {
     page: currentPage,
     limit: 50,
@@ -78,6 +88,7 @@ export default function DeviceListPage() {
 
   const { data, loading, error } = useApi<PaginatedResponse<Device>>("/api/devices", params);
 
+  const tablePreferences = useTablePreferences([{ id: "name", label: "common.name", alwaysVisible: true }, { id: "ip", label: "device.ip" }, { id: "type", label: "common.type" }, { id: "status", label: "common.status" }, { id: "location", label: "device.location" }, { id: "pollingInterval", label: "device.pollingInterval", visible: false }, { id: "lastPolledAt", label: "device.lastPolled" }, { id: "tags", label: "device.tags", visible: false }]);
   const devices = data?.data ?? [];
   const pagination = data?.pagination;
 
@@ -85,18 +96,16 @@ export default function DeviceListPage() {
     filtering: {
       empty: (
         <Box textAlign="center" color="inherit">
-          <b>No devices</b>
+          <b>{t("No devices")}</b>
           <Box padding={{ bottom: "s" }} variant="p" color="inherit">
-            No devices match the current filters.
-          </Box>
+            {t("No devices match the current filters.")}</Box>
         </Box>
       ),
       noMatch: (
         <Box textAlign="center" color="inherit">
-          <b>No matches</b>
+          <b>{t("No matches")}</b>
           <Box padding={{ bottom: "s" }} variant="p" color="inherit">
-            No devices match the search text.
-          </Box>
+            {t("No devices match the search text.")}</Box>
         </Box>
       ),
     },
@@ -112,22 +121,21 @@ export default function DeviceListPage() {
   }, []);
 
   return (
-    <ContentLayout
-      header={<Header variant="h1">{t("page.devices")}</Header>}
-    >
+    <>
       <Table
         {...collectionProps}
+        {...tablePreferences}
         variant="full-page"
         stickyHeader
         loading={loading}
-        loadingText="Loading devices..."
+        loadingText={t("Loading devices...")}
         items={items}
         header={
           <Header
-            variant="h2"
+            variant="awsui-h1-sticky"
             counter={pagination ? `(${pagination.total})` : undefined}
             actions={
-              <Button variant="primary" onClick={() => router.push("/devices/create")}>
+              <Button variant="primary" disabled={!canOperate(user)} onClick={() => router.push("/devices/create")}>
                 {t("device.createDevice")}
               </Button>
             }
@@ -172,11 +180,6 @@ export default function DeviceListPage() {
               currentPageIndex={currentPage}
               pagesCount={pagination.totalPages}
               onChange={({ detail }) => setCurrentPage(detail.currentPageIndex)}
-              ariaLabels={{
-                nextPageLabel: "Next page",
-                previousPageLabel: "Previous page",
-                pageLabel: (pageNumber) => `Page ${pageNumber}`,
-              }}
             />
           ) : undefined
         }
@@ -198,7 +201,7 @@ export default function DeviceListPage() {
           {
             id: "type",
             header: t("common.type"),
-            cell: (item) => item.type.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+            cell: (item) => t(`deviceType.${item.type}`),
             sortingField: "type",
             width: 130,
           },
@@ -252,21 +255,18 @@ export default function DeviceListPage() {
         empty={
           <Box textAlign="center" color="inherit">
             <SpaceBetween size="m">
-              <b>No devices</b>
+              <b>{t("No devices")}</b>
               <Box variant="p" color="inherit">
-                No devices have been added yet.
-              </Box>
-              <Button variant="primary" onClick={() => router.push("/devices/create")}>
-                {t("device.createDevice")}
-              </Button>            </SpaceBetween>
+                {t("No devices have been added yet.")}</Box>
+                          </SpaceBetween>
           </Box>
         }
       />
       {error && (
         <Box color="text-status-error" padding="s">
-          Error loading devices: {error}
+          {t("Error loading devices:")}{error}
         </Box>
       )}
-    </ContentLayout>
+    </>
   );
 }

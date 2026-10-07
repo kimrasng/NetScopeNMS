@@ -1,3 +1,5 @@
+import "@xyflow/react/dist/style.css";
+import "leaflet/dist/leaflet.css";
 import "@cloudscape-design/global-styles/index.css";
 import type { Metadata } from "next";
 

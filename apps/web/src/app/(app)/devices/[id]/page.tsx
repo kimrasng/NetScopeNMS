@@ -1,11 +1,11 @@
 "use client";
+import { formatDateTime } from "@/lib/date-format";
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ContentLayout from "@cloudscape-design/components/content-layout";
 import Header from "@cloudscape-design/components/header";
 import SpaceBetween from "@cloudscape-design/components/space-between";
-import BreadcrumbGroup from "@cloudscape-design/components/breadcrumb-group";
 import Tabs from "@cloudscape-design/components/tabs";
 import Container from "@cloudscape-design/components/container";
 import ColumnLayout from "@cloudscape-design/components/column-layout";
@@ -19,7 +19,9 @@ import Alert from "@cloudscape-design/components/alert";
 import Modal from "@cloudscape-design/components/modal";
 import Select from "@cloudscape-design/components/select";
 import { useCollection } from "@cloudscape-design/collection-hooks";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { TimeSeriesChart, metricUnit } from "@/components/common/time-series-chart";
+import { useAuth } from "@/lib/auth";
+import { canOperate } from "@/lib/permissions";
 import { useApi } from "@/hooks/use-api";
 import { useNotifications } from "@/hooks/use-notifications";
 import { useI18n } from "@/lib/i18n";
@@ -67,22 +69,22 @@ function OverviewTab({ device }: { device: Device }) {
         <KeyValue label={t("common.name")}>{device.name}</KeyValue>
         <KeyValue label={t("device.ip")}>{device.ip}</KeyValue>
         <KeyValue label={t("common.type")}>
-          {device.type.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+          {t(`deviceType.${device.type}`)}
         </KeyValue>
         <KeyValue label={t("common.status")}>
           <StatusIndicator type={status.type}>{t(status.key)}</StatusIndicator>
         </KeyValue>
         <KeyValue label={t("device.snmpVersion")}>{device.snmpVersion ?? "—"}</KeyValue>
-        <KeyValue label={t("device.snmpCommunity")}>{device.snmpCommunity ?? "—"}</KeyValue>
+        <KeyValue label={t("device.snmpCommunity")}>{device.snmpCommunityConfigured ? t("Configured") : t("Not configured")}</KeyValue>
         <KeyValue label={t("device.snmpPort")}>{device.snmpPort ?? "—"}</KeyValue>
         <KeyValue label={t("device.location")}>{device.location ?? "—"}</KeyValue>
         <KeyValue label={t("device.vendor")}>{device.vendor ?? "—"}</KeyValue>
         <KeyValue label={t("device.model")}>{device.model ?? "—"}</KeyValue>
         <KeyValue label={t("device.os")}>{device.osVersion ?? "—"}</KeyValue>
-        <KeyValue label={t("device.pollingInterval")}>{device.pollingInterval}s</KeyValue>
+        <KeyValue label={t("device.pollingInterval")}>{device.pollingInterval}{t("s")}</KeyValue>
         <KeyValue label={t("device.pollingEnabled")}>{device.pollingEnabled ? t("common.enabled") : t("common.disabled")}</KeyValue>
         <KeyValue label={t("device.lastPolled")}>
-          {device.lastPolledAt ? new Date(device.lastPolledAt).toLocaleString() : "Never"}
+          {device.lastPolledAt ? formatDateTime(new Date(device.lastPolledAt)) : t("Never")}
         </KeyValue>
         <KeyValue label={t("device.tags")}>
           {device.tags.length > 0 ? (
@@ -113,13 +115,13 @@ function InterfacesTab({ deviceId }: { deviceId: string }) {
     },
   });
 
-  if (error) return <Alert type="error">Failed to load interfaces: {error}</Alert>;
+  if (error) return <Alert type="error">{t("Failed to load interfaces:")}{error}</Alert>;
 
   return (
     <Table
       {...collectionProps}
       loading={loading}
-      loadingText="Loading interfaces..."
+      loadingText={t("Loading interfaces...")}
       items={items}
       columnDefinitions={[
         {
@@ -162,17 +164,16 @@ function InterfacesTab({ deviceId }: { deviceId: string }) {
         },
         {
           id: "errors",
-          header: "Errors",
+          header: t("Errors"),
           cell: (item) => `In: ${item.inErrors} / Out: ${item.outErrors}`,
           width: 150,
         },
       ]}
       empty={
         <Box textAlign="center" color="inherit">
-          <b>No interfaces</b>
+          <b>{t("No interfaces")}</b>
           <Box variant="p" color="inherit">
-            No interfaces discovered for this device.
-          </Box>
+            {t("No interfaces discovered for this device.")}</Box>
         </Box>
       }
     />
@@ -242,14 +243,14 @@ function MetricsTab({ deviceId }: { deviceId: string }) {
           actions={
             <SpaceBetween direction="horizontal" size="xs">
               <Select
-                selectedOption={METRIC_OPTIONS.find((o) => o.value === metric) ?? METRIC_OPTIONS[0]}
+                selectedOption={{ value: metric, label: t(`metric.${metric}`) }}
                 onChange={({ detail }) => setMetric(detail.selectedOption.value!)}
-                options={METRIC_OPTIONS}
+                options={METRIC_OPTIONS.map(option => ({ ...option, label: t(`metric.${option.value}`) }))}
               />
               <Select
-                selectedOption={TIME_RANGE_OPTIONS.find((o) => o.value === timeRange) ?? TIME_RANGE_OPTIONS[0]}
+                selectedOption={{ value: timeRange, label: t(`metrics.${timeRange}`) }}
                 onChange={({ detail }) => setTimeRange(detail.selectedOption.value!)}
-                options={TIME_RANGE_OPTIONS}
+                options={TIME_RANGE_OPTIONS.map(option => ({ ...option, label: t(`metrics.${option.value}`) }))}
               />
             </SpaceBetween>
           }
@@ -266,32 +267,16 @@ function MetricsTab({ deviceId }: { deviceId: string }) {
       {metricsError && <Alert type="error">{metricsError}</Alert>}
       {!metricsLoading && !metricsError && metricsData.length === 0 && (
         <Box textAlign="center" padding={{ vertical: "xl" }} color="text-status-inactive">
-          No metrics data available for the selected range.
-        </Box>
+          {t("No metrics data available for the selected range.")}</Box>
       )}
-      {!metricsLoading && !metricsError && metricsData.length > 0 && (
-        <div style={{ width: "100%", height: 350 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={metricsData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="time"
-                tickFormatter={(val: string) => new Date(val).toLocaleTimeString()}
-              />
-              <YAxis />
-              <Tooltip labelFormatter={(val: string) => new Date(val).toLocaleString()} />
-              <Line type="monotone" dataKey="avg_value" stroke="#0972d3" name="Avg" dot={false} />
-              <Line type="monotone" dataKey="max_value" stroke="#d91515" name="Max" dot={false} />
-              <Line type="monotone" dataKey="min_value" stroke="#037f0c" name="Min" dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      {!metricsLoading && !metricsError && metricsData.length > 0 && <TimeSeriesChart title={`${t("device.metrics")} · ${t(`metric.${metric}`)}`} unit={metricUnit(metric)} height={320} series={[{ title: t("metrics.avg"), points: metricsData.map(point => ({ time: point.time, value: point.avg_value })) }, { title: t("metrics.max"), points: metricsData.map(point => ({ time: point.time, value: point.max_value })) }, { title: t("metrics.min"), points: metricsData.map(point => ({ time: point.time, value: point.min_value })) }]} />}
+
     </Container>
   );
 }
 
 export default function DeviceDetailPage() {
+  const { user } = useAuth();
   const { t } = useI18n();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -318,7 +303,7 @@ export default function DeviceDetailPage() {
 
   if (loading) {
     return (
-      <ContentLayout header={<Header variant="h1">Loading...</Header>}>
+      <ContentLayout header={<Header variant="h1">{t("Loading...")}</Header>}>
         <Box textAlign="center" padding={{ vertical: "xxxl" }}>
           <Spinner size="large" />
         </Box>
@@ -328,7 +313,7 @@ export default function DeviceDetailPage() {
 
   if (error || !device) {
     return (
-      <ContentLayout header={<Header variant="h1">Device</Header>}>
+      <ContentLayout header={<Header variant="h1">{t("Device")}</Header>}>
         <Alert type="error">{error ?? "Device not found."}</Alert>
       </ContentLayout>
     );
@@ -342,8 +327,8 @@ export default function DeviceDetailPage() {
             variant="h1"
             actions={
               <SpaceBetween direction="horizontal" size="xs">
-                <Button onClick={() => router.push(`/devices/${id}/edit`)}>{t("common.edit")}</Button>
-                <Button onClick={() => setDeleteVisible(true)}>{t("common.delete")}</Button>
+                <Button disabled={!canOperate(user)} onClick={() => router.push(`/devices/${id}/edit`)}>{t("common.edit")}</Button>
+                <Button disabled={user?.role !== "super_admin" && user?.role !== "admin"} onClick={() => setDeleteVisible(true)}>{t("common.delete")}</Button>
               </SpaceBetween>
             }
           >
@@ -352,17 +337,6 @@ export default function DeviceDetailPage() {
         }
       >
         <SpaceBetween size="l">
-          <BreadcrumbGroup
-            items={[
-              { text: "Home", href: "/dashboard" },
-              { text: t("page.devices"), href: "/devices" },
-              { text: device.name, href: `/devices/${id}` },
-            ]}
-            onFollow={(e) => {
-              e.preventDefault();
-              router.push(e.detail.href);
-            }}
-          />
           <Tabs
             tabs={[
               {
@@ -388,7 +362,7 @@ export default function DeviceDetailPage() {
       <Modal
         visible={deleteVisible}
         onDismiss={() => setDeleteVisible(false)}
-        header="Delete device"
+        header={t("Delete device")}
         footer={
           <Box float="right">
             <SpaceBetween direction="horizontal" size="xs">
@@ -402,8 +376,7 @@ export default function DeviceDetailPage() {
           </Box>
         }
       >
-        Are you sure you want to delete <b>{device.name}</b>? This action cannot be undone.
-      </Modal>
+        {t("Are you sure you want to delete")}<b>{device.name}</b>{t("? This action cannot be undone.")}</Modal>
     </>
   );
 }

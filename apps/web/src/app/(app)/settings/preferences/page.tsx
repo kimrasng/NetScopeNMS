@@ -38,7 +38,7 @@ export default function PreferencesPage() {
     <ContentLayout header={<Header variant="h1">{t("page.preferences")}</Header>}>
       <SpaceBetween size="l">
         <Container header={<Header variant="h2">{t("preferences.language")}</Header>}>
-          <FormField description={t("preferences.language.desc")}>
+          <FormField label={t("preferences.language")} description={t("preferences.language.desc")}>
             <Select
               selectedOption={LANGUAGE_OPTIONS.find((o) => o.value === locale) ?? LANGUAGE_OPTIONS[0]}
               options={LANGUAGE_OPTIONS}
@@ -51,7 +51,7 @@ export default function PreferencesPage() {
         </Container>
 
         <Container header={<Header variant="h2">{t("preferences.theme")}</Header>}>
-          <FormField description={t("preferences.theme.desc")}>
+          <FormField label={t("preferences.theme")} description={t(theme === "system" ? "preferences.theme.desc" : "Your selected theme stays active regardless of the system appearance.")}>
             <Select
               selectedOption={themeOptions.find((o) => o.value === theme) ?? themeOptions[0]}
               options={themeOptions}

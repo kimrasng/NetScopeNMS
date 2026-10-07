@@ -1,305 +1,82 @@
 "use client";
-
-import { useState, useMemo, useCallback } from "react";
+import { formatDateTime } from "@/lib/date-format";
+import { useState } from "react";
 import ContentLayout from "@cloudscape-design/components/content-layout";
 import Header from "@cloudscape-design/components/header";
 import Container from "@cloudscape-design/components/container";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import FormField from "@cloudscape-design/components/form-field";
 import Input from "@cloudscape-design/components/input";
+import Autosuggest from "@cloudscape-design/components/autosuggest";
 import Select from "@cloudscape-design/components/select";
 import Button from "@cloudscape-design/components/button";
 import Box from "@cloudscape-design/components/box";
 import ColumnLayout from "@cloudscape-design/components/column-layout";
-import Spinner from "@cloudscape-design/components/spinner";
-import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Table from "@cloudscape-design/components/table";
-import type { SelectProps } from "@cloudscape-design/components/select";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import ExpandableSection from "@cloudscape-design/components/expandable-section";
+import DateRangePicker, { type DateRangePickerProps } from "@cloudscape-design/components/date-range-picker";
+import Alert from "@cloudscape-design/components/alert";
+import { TimeSeriesChart, metricUnit, formatMetric } from "@/components/common/time-series-chart";
 import { useApi } from "@/hooks/use-api";
 import { useI18n } from "@/lib/i18n";
 import { apiGet } from "@/lib/api";
-import type { MetricPoint, AnomalyPoint } from "@/lib/types";
+import type { MetricPoint, AnomalyPoint, Device } from "@/lib/types";
 
-const METRIC_OPTIONS: SelectProps.Option[] = [
-  { label: "CPU", value: "cpu" },
-  { label: "Memory", value: "memory" },
-  { label: "Bandwidth In", value: "bandwidth_in" },
-  { label: "Bandwidth Out", value: "bandwidth_out" },
-  { label: "Latency", value: "latency" },
-  { label: "Ping", value: "ping" },
-];
-
-const BUCKET_OPTIONS: SelectProps.Option[] = [
-  { label: "1 minute", value: "1 minute" },
-  { label: "5 minutes", value: "5 minutes" },
-  { label: "1 hour", value: "1 hour" },
-];
-
-const PRESET_RANGES: { label: string; hours: number }[] = [
-  { label: "1h", hours: 1 },
-  { label: "6h", hours: 6 },
-  { label: "24h", hours: 24 },
-  { label: "7d", hours: 168 },
-];
-
-interface PredictionResult {
-  currentTrend: string;
-  predictedBreach?: string;
-  estimatedTime?: string;
+const metrics = ["cpu", "memory", "bandwidth_in", "bandwidth_out", "latency", "ping"];
+const ranges: DateRangePickerProps.RelativeOption[] = [1, 6, 24].map(amount => ({ key: `${amount}h`, amount, unit: "hour", type: "relative" }));
+ranges.push({ key: "7d", amount: 7, unit: "day", type: "relative" });
+interface PredictionResult { prediction: { daysUntilThreshold: number; slope: number; currentAvg: number } | null; message?: string }
+function metricRange(value: DateRangePickerProps.Value): { from: string; to: string } {
+  if (value.type === "absolute") return { from: new Date(value.startDate).toISOString(), to: new Date(value.endDate).toISOString() };
+  const seconds = { second: 1, minute: 60, hour: 3600, day: 86400, week: 604800, month: 2592000, year: 31536000 }[value.unit];
+  const now = new Date();
+  return { from: new Date(now.getTime() - value.amount * seconds * 1000).toISOString(), to: now.toISOString() };
 }
-
 export default function MetricsPage() {
   const { t } = useI18n();
   const [deviceId, setDeviceId] = useState("");
-  const [metric, setMetric] = useState<SelectProps.Option>(METRIC_OPTIONS[0]);
-  const [bucket, setBucket] = useState<SelectProps.Option>(BUCKET_OPTIONS[1]);
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
+  const [metric, setMetric] = useState("cpu");
+  const [bucket, setBucket] = useState("5 minutes");
+  const [range, setRange] = useState<DateRangePickerProps.Value | null>(ranges[2]);
+  const [query, setQuery] = useState<{ deviceId: string; metric: string; from: string; to: string; bucket: string } | null>(null);
   const [threshold, setThreshold] = useState("90");
-
-  const [queryParams, setQueryParams] = useState<Record<string, string | number | undefined> | null>(null);
-  const [anomalyParams, setAnomalyParams] = useState<Record<string, string | number | undefined> | null>(null);
   const [prediction, setPrediction] = useState<PredictionResult | null>(null);
-  const [predictionLoading, setPredictionLoading] = useState(false);
-
-  const { data: metricsData, loading: metricsLoading } = useApi<{ data: MetricPoint[] }>(
-    queryParams ? "/api/metrics" : null,
-    queryParams ?? undefined,
-  );
-
-  const { data: anomaliesData, loading: anomaliesLoading } = useApi<AnomalyPoint[]>(
-    anomalyParams ? "/api/metrics/anomalies" : null,
-    anomalyParams ?? undefined,
-  );
-
-  const applyPreset = useCallback((hours: number) => {
-    const now = new Date();
-    const from = new Date(now.getTime() - hours * 60 * 60 * 1000);
-    setFromDate(from.toISOString().slice(0, 16));
-    setToDate(now.toISOString().slice(0, 16));
-  }, []);
-
-  const handleQuery = useCallback(() => {
-    if (!deviceId.trim() || !fromDate || !toDate) return;
-    const params = {
-      deviceId,
-      metric: metric.value,
-      from: new Date(fromDate).toISOString(),
-      to: new Date(toDate).toISOString(),
-      bucket: bucket.value,
-    };
-    setQueryParams(params);
-    setAnomalyParams({ deviceId, metric: metric.value });
-  }, [deviceId, metric, fromDate, toDate, bucket]);
-
-  const handlePredict = useCallback(async () => {
-    if (!deviceId.trim()) return;
-    setPredictionLoading(true);
-    try {
-      const res = await apiGet<PredictionResult>("/api/metrics/predict", {
-        deviceId,
-        metric: metric.value,
-        threshold: Number(threshold),
-      });
-      setPrediction(res);
-    } catch {
-      setPrediction(null);
-    } finally {
-      setPredictionLoading(false);
-    }
-  }, [deviceId, metric, threshold]);
-
-  const chartData = useMemo(() => {
-    if (!metricsData?.data) return [];
-    return metricsData.data.map((p) => ({
-      time: new Date(p.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      avg: p.avg_value,
-      max: p.max_value,
-      min: p.min_value,
-    }));
-  }, [metricsData]);
-
-  const anomalyItems = useMemo(() => {
-    if (!anomaliesData) return [];
-    return (Array.isArray(anomaliesData) ? anomaliesData : []).filter((a) => a.is_anomaly);
-  }, [anomaliesData]);
-
-  return (
-    <ContentLayout header={<Header variant="h1">{t("page.metrics")}</Header>}>
-      <SpaceBetween size="l">
-        <Container header={<Header variant="h2">Query Parameters</Header>}>
-          <SpaceBetween size="m">
-            <ColumnLayout columns={4}>
-              <FormField label={t("metrics.deviceId")}>
-                <Input
-                  value={deviceId}
-                  onChange={({ detail }) => setDeviceId(detail.value)}
-                  placeholder={t("metrics.selectDevice")}
-                />
-              </FormField>
-              <FormField label={t("metrics.metric")}>
-                <Select
-                  selectedOption={metric}
-                  onChange={({ detail }) => setMetric(detail.selectedOption)}
-                  options={METRIC_OPTIONS}
-                  placeholder={t("metrics.selectMetric")}
-                />
-              </FormField>
-              <FormField label="From">
-                <Input
-                  value={fromDate}
-                  onChange={({ detail }) => setFromDate(detail.value)}
-                  type="text"
-                  placeholder="YYYY-MM-DDTHH:mm"
-                />
-              </FormField>
-              <FormField label="To">
-                <Input
-                  value={toDate}
-                  onChange={({ detail }) => setToDate(detail.value)}
-                  type="text"
-                  placeholder="YYYY-MM-DDTHH:mm"
-                />
-              </FormField>
-            </ColumnLayout>
-            <SpaceBetween direction="horizontal" size="xs">
-              <FormField label={t("metrics.bucket")}>
-                <Select
-                  selectedOption={bucket}
-                  onChange={({ detail }) => setBucket(detail.selectedOption)}
-                  options={BUCKET_OPTIONS}
-                />
-              </FormField>
-              <FormField label={t("metrics.timeRange")}>
-                <SpaceBetween direction="horizontal" size="xs">
-                  {PRESET_RANGES.map((p) => (
-                    <Button key={p.label} onClick={() => applyPreset(p.hours)}>
-                      {p.label}
-                    </Button>
-                  ))}
-                </SpaceBetween>
-              </FormField>
-            </SpaceBetween>
-            <Button variant="primary" onClick={handleQuery}>
-              {t("metrics.query")}
-            </Button>
-          </SpaceBetween>
-        </Container>
-
-        {metricsLoading && (
-          <Container>
-            <Box textAlign="center" padding="l"><Spinner size="large" /></Box>
-          </Container>
-        )}
-
-        {chartData.length > 0 && (
-          <Container header={<Header variant="h2">Chart</Header>}>
-            <ResponsiveContainer width="100%" height={350}>
-              <LineChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="time" />
-                <YAxis />
-                <Tooltip />
-                <Line type="monotone" dataKey="avg" stroke="#0972d3" name={t("metrics.avg")} dot={false} />
-                <Line type="monotone" dataKey="max" stroke="#d91515" name={t("metrics.max")} dot={false} />
-                <Line type="monotone" dataKey="min" stroke="#037f0c" name={t("metrics.min")} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </Container>
-        )}
-
-        {anomalyParams && (
-          <Container header={<Header variant="h2">{t("metrics.anomalies")}</Header>}>
-            {anomaliesLoading ? (
-              <Spinner size="large" />
-            ) : anomalyItems.length > 0 ? (
-              <Table
-                items={anomalyItems}
-                variant="embedded"
-                columnDefinitions={[
-                  {
-                    id: "timestamp",
-                    header: "Timestamp",
-                    cell: (item) => new Date(item.timestamp).toLocaleString(),
-                    width: 200,
-                  },
-                  {
-                    id: "value",
-                    header: "Value",
-                    cell: (item) => item.value.toFixed(2),
-                    width: 120,
-                  },
-                  {
-                    id: "mean",
-                    header: "Mean",
-                    cell: (item) => item.mean.toFixed(2),
-                    width: 120,
-                  },
-                  {
-                    id: "stddev",
-                    header: "Std Dev",
-                    cell: (item) => item.stddev.toFixed(2),
-                    width: 120,
-                  },
-                  {
-                    id: "status",
-                    header: "Status",
-                    cell: () => <StatusIndicator type="warning">Anomaly</StatusIndicator>,
-                    width: 120,
-                  },
-                ]}
-                empty={<Box textAlign="center" color="inherit">No anomalies detected</Box>}
-              />
-            ) : (
-              <Box textAlign="center" color="inherit" padding="l">No anomalies detected</Box>
-            )}
-          </Container>
-        )}
-
-        <Container header={<Header variant="h2">{t("metrics.prediction")}</Header>}>
-          <SpaceBetween size="m">
-            <ColumnLayout columns={2}>
-              <FormField label={t("metrics.threshold")}>
-                <Input
-                  value={threshold}
-                  onChange={({ detail }) => setThreshold(detail.value)}
-                  type="number"
-                />
-              </FormField>
-              <FormField label=" ">
-                <Button onClick={handlePredict} loading={predictionLoading}>
-                  {t("metrics.predict")}
-                </Button>
-              </FormField>
-            </ColumnLayout>
-            {prediction && (
-              <ColumnLayout columns={3} variant="text-grid">
-                <div>
-                  <Box variant="awsui-key-label">Current Trend</Box>
-                  <Box variant="p">{prediction.currentTrend}</Box>
-                </div>
-                <div>
-                  <Box variant="awsui-key-label">Predicted Breach</Box>
-                  <Box variant="p">{prediction.predictedBreach ?? "—"}</Box>
-                </div>
-                <div>
-                  <Box variant="awsui-key-label">Estimated Time</Box>
-                  <Box variant="p">{prediction.estimatedTime ?? "—"}</Box>
-                </div>
-              </ColumnLayout>
-            )}
-          </SpaceBetween>
-        </Container>
-      </SpaceBetween>
-    </ContentLayout>
-  );
+  const [error, setError] = useState("");
+  const [predictionError, setPredictionError] = useState("");
+  const [predicting, setPredicting] = useState(false);
+  const { data: graph } = useApi<{ nodes: Device[] }>("/api/topology/graph");
+  const { data, loading, error: queryError } = useApi<{ data: MetricPoint[] }>(query ? "/api/metrics" : null, query ?? undefined);
+  const { data: anomalies, loading: anomalyLoading, error: anomalyError } = useApi<{ data: AnomalyPoint[] }>(query ? "/api/metrics/anomalies" : null, query ? { deviceId: query.deviceId, metric: query.metric } : undefined);
+  const devices = (graph?.nodes ?? []).map(device => ({ value: device.id, label: `${device.name} (${device.ip})` }));
+  const unit = metricUnit(query?.metric ?? metric);
+  const chartTitle = `${devices.find(device => device.value === query?.deviceId)?.label ?? t("Device")} · ${t(`metric.${query?.metric ?? metric}`)}`;
+  const anomalyItems = (anomalies?.data ?? []).filter(point => point.is_anomaly);
+  const validateRange: DateRangePickerProps.ValidationFunction = value => {
+    if (!value) return { valid: false, errorMessage: t("Select a time range.") };
+    if (value.type === "relative") return value.amount > 0 ? { valid: true } : { valid: false, errorMessage: t("Select a time range.") };
+    const from = new Date(value.startDate).getTime(), to = new Date(value.endDate).getTime();
+    return Number.isFinite(from) && Number.isFinite(to) && from < to ? { valid: true } : { valid: false, errorMessage: t("Start time must be before end time.") };
+  };
+  return <ContentLayout header={<Header variant="h1" description={t("Explore collected metrics for a device and time range.")}>{t("page.metrics")}</Header>}><SpaceBetween size="l">
+    <Container header={<Header variant="h2">{t("Metric query")}</Header>}><SpaceBetween size="m">
+      <ColumnLayout columns={2}><FormField label={t("Device")} errorText={error && !deviceId ? error : undefined}><Select filteringType="auto" options={devices} selectedOption={devices.find(device => device.value === deviceId) ?? null} placeholder={t("Select a device")} onChange={({ detail }) => { setDeviceId(detail.selectedOption.value ?? ""); setError(""); }} /></FormField>
+      <FormField label={t("Metric")}><Autosuggest value={metric} options={metrics.map(value => ({ value, label: t(`metric.${value}`) }))} onChange={({ detail }) => setMetric(detail.value)} placeholder={t("Select a metric or enter its name.")} /></FormField></ColumnLayout>
+      <ColumnLayout columns={2}><FormField label={t("metrics.timeRange")} constraintText={t("Times are shown in your local timezone.")}><DateRangePicker value={range} onChange={({ detail }) => setRange(detail.value)} relativeOptions={ranges} isValidRange={validateRange} absoluteFormat="long-localized" /></FormField>
+      <FormField label={t("Aggregation interval")}><Select options={[{ value: "1 minute", label: t("metrics.1min") }, { value: "5 minutes", label: t("metrics.5min") }, { value: "1 hour", label: t("metrics.1hour") }]} selectedOption={{ value: bucket, label: t({ "1 minute": "metrics.1min", "5 minutes": "metrics.5min", "1 hour": "metrics.1hour" }[bucket] ?? bucket) }} onChange={({ detail }) => setBucket(detail.selectedOption.value ?? "5 minutes")} /></FormField></ColumnLayout>
+      {error && deviceId && <Alert type="error">{error}</Alert>}
+      <Button variant="primary" loading={loading} onClick={() => { if (!deviceId) { setError(t("Select a device.")); return; } if (!metric.trim()) { setError(t("Select a metric.")); return; } if (!range || !validateRange(range).valid) { setError(t("Select a time range.")); return; } setQuery({ deviceId, metric, bucket, ...metricRange(range) }); setError(""); setPrediction(null); setPredictionError(""); }}>{t("metrics.query")}</Button>
+    </SpaceBetween></Container>
+    {query && <>
+      {queryError && <Alert type="error">{queryError}</Alert>}
+      <Container header={<Header variant="h2" description={`${formatDateTime(new Date(query.from))} – ${formatDateTime(new Date(query.to))}`}>{chartTitle}</Header>}><TimeSeriesChart loading={loading} title={chartTitle} unit={unit} height={320} series={[{ title: t("metrics.avg"), points: (data?.data ?? []).map(point => ({ time: point.time, value: point.avg_value })) }, { title: t("metrics.max"), points: (data?.data ?? []).map(point => ({ time: point.time, value: point.max_value })) }, { title: t("metrics.min"), points: (data?.data ?? []).map(point => ({ time: point.time, value: point.min_value })) }]} /></Container>
+      <ExpandableSection variant="container" headerText={t("metrics.anomalies")}><SpaceBetween size="m"><Box>{t("Anomalies use the latest samples for the selected device and metric.")}</Box>{anomalyError && <Alert type="error">{anomalyError}</Alert>}<Table variant="embedded" loading={anomalyLoading} items={anomalyItems} columnDefinitions={[
+        { id: "timestamp", header: t("Time"), cell: point => formatDateTime(new Date(point.timestamp)) }, { id: "value", header: t("Value"), cell: point => formatMetric(point.value, unit) }, { id: "mean", header: t("Average"), cell: point => point.mean == null ? "—" : formatMetric(point.mean, unit) }, { id: "deviation", header: t("Standard deviation"), cell: point => point.stddev == null ? "—" : formatMetric(point.stddev, unit) },
+      ]} empty={t("No anomalies detected")} /></SpaceBetween></ExpandableSection>
+      <ExpandableSection variant="container" headerText={t("metrics.prediction")}><SpaceBetween size="m"><Box>{t("Prediction uses the recent trend, independent of the displayed time range.")}</Box><FormField label={`${t("metrics.threshold")}${unit ? ` (${unit})` : ""}`}><Input type="number" value={threshold} onChange={({ detail }) => setThreshold(detail.value)} /></FormField>
+        <Button loading={predicting} onClick={async () => { if (!threshold.trim() || !Number.isFinite(Number(threshold))) { setPredictionError(t("Enter a numeric threshold.")); return; } setPredicting(true); setPredictionError(""); try { setPrediction(await apiGet<PredictionResult>("/api/metrics/predict", { deviceId: query.deviceId, metric: query.metric, threshold: Number(threshold) })); } catch (err) { setPredictionError(err instanceof Error ? err.message : t("Prediction failed")); } finally { setPredicting(false); } }}>{t("metrics.predict")}</Button>
+        {predictionError && <Alert type="error">{predictionError}</Alert>}
+        {prediction && (prediction.prediction ? <ColumnLayout columns={2} variant="text-grid"><div><Box variant="awsui-key-label">{t("Current average")}</Box><Box>{formatMetric(prediction.prediction.currentAvg, unit)}</Box></div><div><Box variant="awsui-key-label">{t("Estimated time to threshold")}</Box><Box>{prediction.prediction.daysUntilThreshold.toFixed(1)} {t("days")}</Box></div></ColumnLayout> : <Box>{prediction.message ? t(prediction.message) : t("No reliable prediction is available.")}</Box>)}
+      </SpaceBetween></ExpandableSection>
+    </>}
+  </SpaceBetween></ContentLayout>;
 }

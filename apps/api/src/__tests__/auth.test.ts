@@ -1,184 +1,54 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import Fastify, { type FastifyInstance } from "fastify";
+import jwt from "@fastify/jwt";
+import { createDb, users } from "@netpulse/shared";
+import { authenticate, requireRole } from "../middleware/auth.js";
+import { registerRequestPolicy } from "../services/request-policy.js";
 
-describe("Auth Middleware", () => {
-  describe("authenticate", () => {
-    it("sets userId and userRole from JWT payload", async () => {
-      const request = {
-        jwtVerify: vi.fn().mockResolvedValue({ id: "user-1", role: "admin" }),
-        server: {
-          db: {
-            select: vi.fn().mockReturnValue({
-              from: vi.fn().mockReturnValue({
-                where: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([{
-                    scope: "all",
-                    allowedDeviceIds: ["dev-1"],
-                    allowedGroupIds: ["grp-1"],
-                  }]),
-                }),
-              }),
-            }),
-          },
-        },
-      } as any;
-
-      const reply = { code: vi.fn().mockReturnThis(), send: vi.fn(), sent: false } as any;
-
-      const { authenticate } = await import("../middleware/auth.js");
-      await authenticate(request, reply);
-
-      expect(request.userId).toBe("user-1");
-      expect(request.userRole).toBe("admin");
-      expect(request.userScope).toBe("all");
-      expect(request.userAllowedDeviceIds).toEqual(["dev-1"]);
-      expect(request.userAllowedGroupIds).toEqual(["grp-1"]);
-    });
-
-    it("defaults allowedDeviceIds and allowedGroupIds to empty arrays", async () => {
-      const request = {
-        jwtVerify: vi.fn().mockResolvedValue({ id: "user-2", role: "viewer" }),
-        server: {
-          db: {
-            select: vi.fn().mockReturnValue({
-              from: vi.fn().mockReturnValue({
-                where: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([{
-                    scope: "limited",
-                    allowedDeviceIds: null,
-                    allowedGroupIds: null,
-                  }]),
-                }),
-              }),
-            }),
-          },
-        },
-      } as any;
-
-      const reply = { code: vi.fn().mockReturnThis(), send: vi.fn(), sent: false } as any;
-
-      const { authenticate } = await import("../middleware/auth.js");
-      await authenticate(request, reply);
-
-      expect(request.userAllowedDeviceIds).toEqual([]);
-      expect(request.userAllowedGroupIds).toEqual([]);
-    });
-
-    it("returns 401 when JWT verification fails", async () => {
-      const request = {
-        jwtVerify: vi.fn().mockRejectedValue(new Error("Invalid token")),
-      } as any;
-
-      const reply = { code: vi.fn().mockReturnThis(), send: vi.fn(), sent: false } as any;
-
-      const { authenticate } = await import("../middleware/auth.js");
-      await authenticate(request, reply);
-
-      expect(reply.code).toHaveBeenCalledWith(401);
-      expect(reply.send).toHaveBeenCalledWith({
-        error: "Unauthorized",
-        message: "Invalid or expired token",
-      });
-    });
-
-    it("does not set user properties when no DB result found", async () => {
-      const request = {
-        jwtVerify: vi.fn().mockResolvedValue({ id: "user-3", role: "viewer" }),
-        server: {
-          db: {
-            select: vi.fn().mockReturnValue({
-              from: vi.fn().mockReturnValue({
-                where: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([]),
-                }),
-              }),
-            }),
-          },
-        },
-      } as any;
-
-      const reply = { code: vi.fn().mockReturnThis(), send: vi.fn(), sent: false } as any;
-
-      const { authenticate } = await import("../middleware/auth.js");
-      await authenticate(request, reply);
-
-      expect(request.userId).toBe("user-3");
-      expect(request.userRole).toBe("viewer");
-      expect(request.userScope).toBeUndefined();
-    });
+const fixture: typeof users.$inferSelect = {
+  id: "d39818bf-5095-4441-a5d2-1618b4f2a3f3", email: "fixture@example.test", name: "Fixture", passwordHash: null,
+  authVersion: 0, role: "operator", phone: null, telegramChatId: null, avatarUrl: null, onCall: false,
+  provider: "local", providerId: null, enabled: true, scope: "all", allowedDeviceIds: [], allowedGroupIds: [],
+  lastLoginAt: null, createdAt: new Date(), updatedAt: new Date(),
+};
+let app: FastifyInstance;
+let connection: ReturnType<typeof createDb>;
+beforeEach(async () => {
+  connection = createDb("postgresql://unused:unused@127.0.0.1:1/unused");
+  vi.spyOn(connection.db.query.users, "findFirst").mockResolvedValue(fixture);
+  app = Fastify();
+  app.decorate("db", connection.db);
+  await app.register(jwt, { secret: "unit-test-only-secret" });
+  registerRequestPolicy(app);
+  app.get("/secured", { preHandler: authenticate }, async request => ({ id: request.userId, role: request.userRole, scope: request.userScope }));
+  app.get("/operator", { preHandler: requireRole("operator", "admin") }, async () => ({ ok: true }));
+});
+afterEach(async () => { await app.close(); await connection.client.end(); vi.restoreAllMocks(); });
+const headers = (role = "operator", authVersion = 0) => ({ authorization: `Bearer ${app.jwt.sign({ id: fixture.id, role, authVersion })}` });
+describe("Authentication lifecycle", () => {
+  it("authenticates an enabled account using its current database role", async () => {
+    const response = await app.inject({ url: "/secured", headers: headers("admin") });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ id: fixture.id, role: "operator", scope: "all" });
   });
-
-  describe("requireRole", () => {
-    it("allows request when user has required role", async () => {
-      const request = {
-        jwtVerify: vi.fn().mockResolvedValue({ id: "user-1", role: "admin" }),
-        server: {
-          db: {
-            select: vi.fn().mockReturnValue({
-              from: vi.fn().mockReturnValue({
-                where: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([{ scope: "all", allowedDeviceIds: [], allowedGroupIds: [] }]),
-                }),
-              }),
-            }),
-          },
-        },
-      } as any;
-
-      const reply = { code: vi.fn().mockReturnThis(), send: vi.fn(), sent: false } as any;
-
-      const { requireRole } = await import("../middleware/auth.js");
-      const middleware = requireRole("admin", "operator");
-      await middleware(request, reply);
-
-      expect(reply.code).not.toHaveBeenCalledWith(403);
-    });
-
-    it("returns 403 when user lacks required role", async () => {
-      const request = {
-        jwtVerify: vi.fn().mockResolvedValue({ id: "user-1", role: "viewer" }),
-        server: {
-          db: {
-            select: vi.fn().mockReturnValue({
-              from: vi.fn().mockReturnValue({
-                where: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue([{ scope: "all", allowedDeviceIds: [], allowedGroupIds: [] }]),
-                }),
-              }),
-            }),
-          },
-        },
-      } as any;
-
-      const reply = { code: vi.fn().mockReturnThis(), send: vi.fn(), sent: false } as any;
-
-      const { requireRole } = await import("../middleware/auth.js");
-      const middleware = requireRole("admin");
-      await middleware(request, reply);
-
-      expect(reply.code).toHaveBeenCalledWith(403);
-      expect(reply.send).toHaveBeenCalledWith({
-        error: "Forbidden",
-        message: "Insufficient permissions",
-      });
-    });
-
-    it("short-circuits when authenticate already sent 401", async () => {
-      const request = {
-        jwtVerify: vi.fn().mockRejectedValue(new Error("bad token")),
-      } as any;
-
-      const codeFn = vi.fn().mockReturnThis();
-      const sendFn = vi.fn().mockImplementation(function (this: any) {
-        reply.sent = true;
-      });
-      const reply = { code: codeFn, send: sendFn, sent: false } as any;
-
-      const { requireRole } = await import("../middleware/auth.js");
-      const middleware = requireRole("admin");
-      await middleware(request, reply);
-
-      expect(codeFn).toHaveBeenCalledWith(401);
-      expect(codeFn).not.toHaveBeenCalledWith(403);
-    });
+  it("denies a deleted account despite a valid JWT", async () => {
+    vi.mocked(connection.db.query.users.findFirst).mockResolvedValue(undefined);
+    expect((await app.inject({ url: "/secured", headers: headers() })).statusCode).toBe(401);
+  });
+  it("denies a disabled account despite a valid JWT", async () => {
+    vi.mocked(connection.db.query.users.findFirst).mockResolvedValue({ ...fixture, enabled: false });
+    expect((await app.inject({ url: "/secured", headers: headers() })).statusCode).toBe(401);
+  });
+  it("applies a downgrade without waiting for JWT expiry", async () => {
+    vi.mocked(connection.db.query.users.findFirst).mockResolvedValue({ ...fixture, role: "viewer" });
+    expect((await app.inject({ url: "/operator", headers: headers() })).statusCode).toBe(403);
+  });
+  it("revokes an old session after credential version changes", async () => {
+    vi.mocked(connection.db.query.users.findFirst).mockResolvedValue({ ...fixture, authVersion: 1 });
+    expect((await app.inject({ url: "/secured", headers: headers() })).statusCode).toBe(401);
+  });
+  it("rejects missing and invalid credentials", async () => {
+    expect((await app.inject({ url: "/operator" })).statusCode).toBe(401);
+    expect((await app.inject({ url: "/secured", headers: { authorization: "Bearer invalid.jwt.signature" } })).statusCode).toBe(401);
   });
 });

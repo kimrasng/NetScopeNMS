@@ -41,6 +41,7 @@ export default function SiteSettingsPage() {
     setSaving(true);
     try {
       await apiPut("/api/setup/site", { siteName, logoUrl });
+      window.dispatchEvent(new Event("netpulse:site-updated"));
       addNotification({ type: "success", content: t("site.saved") });
     } catch (err) {
       addNotification({ type: "error", content: err instanceof Error ? err.message : "Failed to save settings." });
@@ -69,20 +70,20 @@ export default function SiteSettingsPage() {
             </SpaceBetween>
           }
         >
-          <Container header={<Header variant="h2">General</Header>}>
+          <Container header={<Header variant="h2">{t("General")}</Header>}>
             <SpaceBetween size="l">
-              <FormField label={t("site.siteName")} description="Display name shown in the top navigation.">
+              <FormField label={t("site.siteName")} description={t("Display name shown in the top navigation.")}>
                 <Input
                   value={siteName}
                   onChange={({ detail }) => setSiteName(detail.value)}
-                  placeholder="NetPulse"
+                  placeholder={t("NetPulse")}
                 />
               </FormField>
-              <FormField label={t("site.logoUrl")} description="URL to the logo image displayed in the header.">
+              <FormField label={t("site.logoUrl")} description={t("URL to the logo image displayed in the header.")}>
                 <Input
                   value={logoUrl}
                   onChange={({ detail }) => setLogoUrl(detail.value)}
-                  placeholder="https://example.com/logo.png"
+                  placeholder={t("https://example.com/logo.png")}
                   type="url"
                 />
               </FormField>

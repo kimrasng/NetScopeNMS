@@ -1,7 +1,8 @@
 "use client";
+import { formatDateTime } from "@/lib/date-format";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import ContentLayout from "@cloudscape-design/components/content-layout";
 import Header from "@cloudscape-design/components/header";
 import Container from "@cloudscape-design/components/container";
@@ -11,13 +12,16 @@ import Box from "@cloudscape-design/components/box";
 import Badge from "@cloudscape-design/components/badge";
 import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Button from "@cloudscape-design/components/button";
-import BreadcrumbGroup from "@cloudscape-design/components/breadcrumb-group";
-import ExpandableSection from "@cloudscape-design/components/expandable-section";
+import { AnalysisView } from "@/components/common/analysis-view";
+import Link from "@cloudscape-design/components/link";
 import FormField from "@cloudscape-design/components/form-field";
 import Textarea from "@cloudscape-design/components/textarea";
 import Spinner from "@cloudscape-design/components/spinner";
 import Modal from "@cloudscape-design/components/modal";
 import Input from "@cloudscape-design/components/input";
+import Alert from "@cloudscape-design/components/alert";
+import { useAuth } from "@/lib/auth";
+import { canOperate } from "@/lib/permissions";
 import { useApi } from "@/hooks/use-api";
 import { useNotifications } from "@/hooks/use-notifications";
 import { useI18n } from "@/lib/i18n";
@@ -62,9 +66,9 @@ interface IncidentDetail extends Incident {
 export default function IncidentDetailPage() {
   const { t } = useI18n();
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
   const { addNotification } = useNotifications();
-  const { data: incident, loading, refetch } = useApi<IncidentDetail>(`/api/incidents/${id}`);
+  const { user } = useAuth();
+  const { data: incident, loading, error, refetch } = useApi<IncidentDetail>(`/api/incidents/${id}`);
 
   const [comment, setComment] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
@@ -108,9 +112,11 @@ export default function IncidentDetailPage() {
     setAckComment("");
   }
 
+  if (error) return <Alert type="error" action={<Button onClick={refetch}>{t("Retry")}</Button>}>{error}</Alert>;
+  if (!loading && !incident) return <Alert type="error">{t("Incident not found")}</Alert>;
   if (loading || !incident) {
     return (
-      <ContentLayout header={<Header variant="h1">Incident</Header>}>
+      <ContentLayout header={<Header variant="h1">{t("Incident")}</Header>}>
         <Box textAlign="center" padding="xxl">
           <Spinner size="large" />
         </Box>
@@ -129,7 +135,7 @@ export default function IncidentDetailPage() {
           variant="h1"
           actions={
             <SpaceBetween direction="horizontal" size="s">
-              {incident.status === "problem" && (
+              {canOperate(user) && incident.status === "problem" && (
                 <Button
                   loading={actionLoading === "acknowledge"}
                   onClick={() => setAckModalVisible(true)}
@@ -137,7 +143,7 @@ export default function IncidentDetailPage() {
                   {t("incident.acknowledge")}
                 </Button>
               )}
-              {incident.status !== "resolved" && (
+              {canOperate(user) && incident.status !== "resolved" && (
                 <Button
                   loading={actionLoading === "resolve"}
                   onClick={() => handleAction("resolve")}
@@ -145,10 +151,11 @@ export default function IncidentDetailPage() {
                   {t("incident.resolve")}
                 </Button>
               )}
+              <Button href={`/ai?incidentId=${id}`} iconName="gen-ai">{t("ai.chat")}</Button>
               <Button
                 variant="primary"
                 loading={actionLoading === "ai-analysis"}
-                onClick={() => handleAction("ai-analysis")}
+                disabled={!canOperate(user)} onClick={() => handleAction("ai-analysis")}
               >
                 {t("incident.aiAnalysis")}
               </Button>
@@ -159,27 +166,16 @@ export default function IncidentDetailPage() {
         </Header>
       }
     >
-      <BreadcrumbGroup
-        items={[
-          { text: "Home", href: "/dashboard" },
-          { text: t("page.incidents"), href: "/incidents" },
-          { text: incident.title, href: `/incidents/${id}` },
-        ]}
-        onFollow={(e) => {
-          e.preventDefault();
-          router.push(e.detail.href);
-        }}
-      />
 
       <SpaceBetween size="l">
         {/* ─── Overview ─────────────────────────────── */}
-        <Container header={<Header variant="h2">Overview</Header>}>
+        <Container header={<Header variant="h2">{t("Overview")}</Header>}>
           <ColumnLayout columns={3} variant="text-grid">
             <SpaceBetween size="s">
               <div>
                 <Box variant="awsui-key-label">{t("incident.severity")}</Box>
                 <Badge color={SEVERITY_COLOR[incident.severity]}>
-                  {incident.severity.charAt(0).toUpperCase() + incident.severity.slice(1)}
+                  {t(`severity.${incident.severity}`)}
                 </Badge>
               </div>
               <div>
@@ -190,7 +186,7 @@ export default function IncidentDetailPage() {
             <SpaceBetween size="s">
               <div>
                 <Box variant="awsui-key-label">{t("incident.device")}</Box>
-                <Box>{deviceName} ({deviceIp})</Box>
+                <Link href={`/devices/${incident.deviceId}`}>{deviceName} ({deviceIp})</Link>
               </div>
               <div>
                 <Box variant="awsui-key-label">{t("incident.metricName")}</Box>
@@ -204,16 +200,16 @@ export default function IncidentDetailPage() {
             <SpaceBetween size="s">
               <div>
                 <Box variant="awsui-key-label">{t("incident.startedAt")}</Box>
-                <Box>{new Date(incident.startedAt).toLocaleString()}</Box>
+                <Box>{formatDateTime(new Date(incident.startedAt))}</Box>
               </div>
               <div>
                 <Box variant="awsui-key-label">{t("incident.resolvedAt")}</Box>
-                <Box>{incident.resolvedAt ? new Date(incident.resolvedAt).toLocaleString() : "-"}</Box>
+                <Box>{incident.resolvedAt ? formatDateTime(new Date(incident.resolvedAt)) : "-"}</Box>
               </div>
               {incident.acknowledgedBy && (
                 <div>
-                  <Box variant="awsui-key-label">Acknowledged By</Box>
-                  <Box>{incident.acknowledgedBy}</Box>
+                  <Box variant="awsui-key-label">{t("Acknowledged By")}</Box>
+                  <Box>{incident.acknowledgedByName ?? t("User")}</Box>
                 </div>
               )}
             </SpaceBetween>
@@ -223,9 +219,7 @@ export default function IncidentDetailPage() {
         {/* ─── AI Root Cause Analysis ──────────────── */}
         {incident.aiRca && (
           <Container header={<Header variant="h2">{t("incident.aiRca")}</Header>}>
-            <ExpandableSection headerText="Analysis Details" defaultExpanded>
-              <div style={{ whiteSpace: "pre-wrap" }}><Box variant="p">{incident.aiRca}</Box></div>
-            </ExpandableSection>
+            <AnalysisView raw={incident.aiRca} summary={incident.aiSummary} />
           </Container>
         )}
 
@@ -236,13 +230,13 @@ export default function IncidentDetailPage() {
               {incident.events.map((event) => (
                 <div key={event.id} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                   <Badge color={EVENT_TYPE_COLOR[event.type] ?? "grey"}>
-                    {event.type}
+                    {t(`event.${event.type}`)}
                   </Badge>
                   <div style={{ flex: 1 }}>
                     <Box variant="p">{event.message}</Box>
                     <Box variant="small" color="text-body-secondary">
-                      {new Date(event.createdAt).toLocaleString()}
-                      {event.createdBy ? ` · ${event.createdBy}` : ""}
+                      {formatDateTime(new Date(event.createdAt))}
+                      {event.createdByName ? ` · ${event.createdByName}` : ""}
                     </Box>
                   </div>
                 </div>
@@ -250,8 +244,7 @@ export default function IncidentDetailPage() {
             </SpaceBetween>
           ) : (
             <Box textAlign="center" color="inherit" padding="l">
-              No events recorded.
-            </Box>
+              {t("No events recorded.")}</Box>
           )}
         </Container>
 
@@ -262,14 +255,13 @@ export default function IncidentDetailPage() {
               <Textarea
                 value={comment}
                 onChange={({ detail }) => setComment(detail.value)}
-                placeholder="Write a comment..."
+                placeholder={t("Write a comment...")}
                 rows={3}
               />
             </FormField>
             <Button
               loading={submittingComment}
-              disabled={!comment.trim()}
-              onClick={handleAddComment}
+              disabled={!comment.trim() || !canOperate(user)} onClick={handleAddComment}
             >
               {t("incident.addComment")}
             </Button>
@@ -299,7 +291,7 @@ export default function IncidentDetailPage() {
           <Input
             value={ackComment}
             onChange={({ detail }) => setAckComment(detail.value)}
-            placeholder="Add a note..."
+            placeholder={t("Add a note...")}
           />
         </FormField>
       </Modal>

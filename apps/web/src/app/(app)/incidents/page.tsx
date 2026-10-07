@@ -1,8 +1,9 @@
 "use client";
+import { formatDateTime } from "@/lib/date-format";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import ContentLayout from "@cloudscape-design/components/content-layout";
+import Link from "@cloudscape-design/components/link";
 import Header from "@cloudscape-design/components/header";
 import Table from "@cloudscape-design/components/table";
 import Pagination from "@cloudscape-design/components/pagination";
@@ -40,6 +41,7 @@ const STATUS_MAP: Record<IncidentStatus, { type: "success" | "error" | "warning"
 
 const STATUS_OPTION_KEYS = [
   { value: "", key: "incident.allStatuses" },
+  { value: "active", key: "Active incidents" },
   { value: "problem", key: "status.problem" },
   { value: "acknowledged", key: "status.acknowledged" },
   { value: "resolved", key: "status.resolved" },
@@ -66,13 +68,15 @@ export default function IncidentsPage() {
   const [statusFilter, setStatusFilter] = useState(statusOptions[0]);
   const [severityFilter, setSeverityFilter] = useState(severityOptions[0]);
 
+  useEffect(() => { const value = new URLSearchParams(window.location.search).get("status"); const option = STATUS_OPTION_KEYS.find(item => item.value === value); if (option) setStatusFilter({ value: option.value, label: t(option.key) }); }, [t]);
+
   const columnDefinitions = [
     {
       id: "severity",
       header: t("incident.severity"),
       cell: (item: Incident) => (
         <Badge color={SEVERITY_COLOR[item.severity]}>
-          {item.severity.charAt(0).toUpperCase() + item.severity.slice(1)}
+          {t(`severity.${item.severity}`)}
         </Badge>
       ),
       sortingField: "severity",
@@ -81,13 +85,13 @@ export default function IncidentsPage() {
     {
       id: "title",
       header: t("incident.title"),
-      cell: (item: Incident) => item.title,
+      cell: (item: Incident) => <Link href={`/incidents/${item.id}`}>{item.title}</Link>,
       sortingField: "title",
     },
     {
       id: "deviceName",
       header: t("incident.deviceName"),
-      cell: (item: Incident) => item.deviceName ?? "-",
+      cell: (item: Incident) => <Link href={`/devices/${item.deviceId}`}>{item.deviceName ?? t("Device")}</Link>,
       sortingField: "deviceName",
     },
     {
@@ -108,14 +112,14 @@ export default function IncidentsPage() {
     {
       id: "startedAt",
       header: t("incident.startedAt"),
-      cell: (item: Incident) => new Date(item.startedAt).toLocaleString(),
+      cell: (item: Incident) => formatDateTime(new Date(item.startedAt)),
       sortingField: "startedAt",
       width: 180,
     },
     {
       id: "updatedAt",
       header: t("common.updatedAt"),
-      cell: (item: Incident) => new Date(item.updatedAt).toLocaleString(),
+      cell: (item: Incident) => formatDateTime(new Date(item.updatedAt)),
       sortingField: "updatedAt",
       width: 180,
     },
@@ -146,12 +150,12 @@ export default function IncidentsPage() {
   );
 
   return (
-    <ContentLayout header={<Header variant="h1">{t("page.incidents")}</Header>}>
+    <>
       <Table
         {...collectionProps}
         items={items}
         loading={loading}
-        loadingText="Loading incidents..."
+        loadingText={t("Loading incidents...")}
         columnDefinitions={columnDefinitions}
         variant="full-page"
         stickyHeader
@@ -187,19 +191,18 @@ export default function IncidentsPage() {
           />
         }
         header={
-          <Header counter={data ? `(${data.pagination.total})` : undefined}>
+          <Header variant="awsui-h1-sticky" counter={data ? `(${data.pagination.total})` : undefined}>
             {t("page.incidents")}
           </Header>
         }
         empty={
           <Box textAlign="center" color="inherit" padding="l">
-            <Box variant="strong">No incidents</Box>
+            <Box variant="strong">{t("No incidents")}</Box>
             <Box variant="p" color="inherit">
-              No incidents match the current filters.
-            </Box>
+              {t("No incidents match the current filters.")}</Box>
           </Box>
         }
       />
-    </ContentLayout>
+    </>
   );
 }

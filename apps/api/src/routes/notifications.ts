@@ -1,156 +1,66 @@
+import { bodySchema } from "../services/contracts.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { eq, desc } from "drizzle-orm";
-import { notificationChannels, notifications } from "@netpulse/shared";
-import { dispatchNotification, type NotificationPayload } from "@netpulse/notification";
+import { eq, desc, inArray, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { notificationChannels, notifications, incidents } from "@netpulse/shared";
 import { authenticate, requireRole } from "../middleware/auth.js";
-import { logAudit } from "./audit-logs.js";
+import { pagination, pageResult } from "../services/validation.js";
+import { deviceScope } from "../services/access.js";
+import { deliverRecord } from "../services/delivery.js";
+import { notificationTransportSchema } from "@netpulse/notification";
 
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelay: number = 1000,
-): Promise<T> {
-  let lastError: Error | undefined;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      lastError = err;
-      if (attempt < maxRetries) {
-        const delay = baseDelay * Math.pow(2, attempt);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
+const channelSchema = z.object({ name: z.string().min(1), type: z.enum(["email", "telegram", "discord", "slack", "sms", "pagerduty", "webhook", "in_app"]), config: z.record(z.unknown()), enabled: z.boolean().default(true) });
+function mergeConfiguration(existing: Record<string, unknown>, incoming: Record<string, unknown>): Record<string, unknown> {
+  const merged = { ...existing };
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value === "[REDACTED]") continue;
+    merged[key] = value && typeof value === "object" && !Array.isArray(value) ? mergeConfiguration(z.record(z.unknown()).parse(existing[key] ?? {}), z.record(z.unknown()).parse(value)) : value;
   }
-  throw lastError;
+  return merged;
 }
-
-const channelSchema = z.object({
-  name: z.string().min(1),
-  type: z.enum(["email", "telegram", "discord", "slack", "sms", "pagerduty", "webhook", "in_app"]),
-  config: z.record(z.unknown()),
-  enabled: z.boolean().default(true),
-});
-
-/**
- * Send notification to all enabled channels and log results
- */
-export async function sendNotificationToAll(app: FastifyInstance, payload: NotificationPayload) {
-  const channels = await app.db.select().from(notificationChannels);
-  const enabledChannels = channels.filter((c) => c.enabled);
-
-  for (const channel of enabledChannels) {
-    try {
-      await withRetry(() => dispatchNotification(channel as any, payload));
-      // Log success
-      await app.db.insert(notifications).values({
-        incidentId: payload.incidentId || null,
-        channelId: channel.id,
-        channelType: channel.type,
-        status: "sent",
-        payload: payload as any,
-        sentAt: new Date(),
-      });
-    } catch (err: any) {
-      // Log failure
-      await app.db.insert(notifications).values({
-        incidentId: payload.incidentId || null,
-        channelId: channel.id,
-        channelType: channel.type,
-        status: "failed",
-        payload: payload as any,
-        error: err.message,
-      });
-      app.log.error({ err, channel: channel.name }, "Notification send failed after retries");
-    }
-  }
-
-  // WebSocket in-app notification
-  if ((app as any).io) {
-    (app as any).io.emit("notification", payload);
-  }
-}
-
-/**
- * Notification channel management routes
- */
 export async function notificationRoutes(app: FastifyInstance) {
-  // List channels
-  app.get("/channels", { preHandler: [authenticate] }, async () => {
-    return app.db.select().from(notificationChannels).orderBy(notificationChannels.name);
-  });
-
-  // Create channel
-  app.post("/channels", { preHandler: [requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.get("/channels", { preHandler: [authenticate] }, async () => app.db.select().from(notificationChannels).orderBy(notificationChannels.name));
+  app.post("/channels", { schema: bodySchema(channelSchema), preHandler: [requireRole("super_admin", "admin")] }, async (request, reply) => {
     const body = channelSchema.parse(request.body);
+    notificationTransportSchema.parse(body);
     const [channel] = await app.db.insert(notificationChannels).values(body).returning();
-    await logAudit(app.db, { userId: request.userId, action: "notification-channel.create", resource: "notification-channel", resourceId: channel.id, details: body, ipAddress: request.ip });
     return reply.code(201).send(channel);
   });
-
-  // Update channel
-  app.put("/channels/:id", { preHandler: [requireRole("super_admin", "admin")] }, async (request, reply) => {
+  app.put("/channels/:id", { schema: bodySchema(channelSchema.partial()), preHandler: [requireRole("super_admin", "admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const existing = await app.db.query.notificationChannels.findFirst({ where: eq(notificationChannels.id, id) });
+    if (!existing) return reply.code(404).send({ error: "Channel not found" });
     const body = channelSchema.partial().parse(request.body);
-    const [channel] = await app.db.update(notificationChannels)
-      .set({ ...body, updatedAt: new Date() })
-      .where(eq(notificationChannels.id, id))
-      .returning();
-    if (!channel) return reply.code(404).send({ error: "Channel not found" });
-    await logAudit(app.db, { userId: request.userId, action: "notification-channel.update", resource: "notification-channel", resourceId: id, details: body, ipAddress: request.ip });
+    const config = body.config ? mergeConfiguration(z.record(z.unknown()).parse(existing.config), body.config) : existing.config;
+    notificationTransportSchema.parse({ type: body.type ?? existing.type, config });
+    const [channel] = await app.db.update(notificationChannels).set({ ...body, config, updatedAt: new Date() }).where(eq(notificationChannels.id, id)).returning();
     return channel;
   });
-
-  // Delete channel
   app.delete("/channels/:id", { preHandler: [requireRole("super_admin", "admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const [channel] = await app.db.delete(notificationChannels)
-      .where(eq(notificationChannels.id, id))
-      .returning();
-    if (!channel) return reply.code(404).send({ error: "Channel not found" });
-    await logAudit(app.db, { userId: request.userId, action: "notification-channel.delete", resource: "notification-channel", resourceId: id, ipAddress: request.ip });
-    return { message: "Channel deleted" };
+    // Preserve delivery history while removing its live channel reference.
+    const deleted = await app.db.transaction(async tx => {
+      await tx.update(notifications).set({ channelId: null }).where(eq(notifications.channelId, id));
+      return tx.delete(notificationChannels).where(eq(notificationChannels.id, id)).returning();
+    });
+    return deleted.length ? { ok: true } : reply.code(404).send({ error: "Channel not found" });
   });
-
-  // Test channel - actually sends a test notification now
   app.post("/test/:channelId", { preHandler: [requireRole("super_admin", "admin")] }, async (request, reply) => {
     const { channelId } = request.params as { channelId: string };
-    const channel = await app.db.query.notificationChannels.findFirst({
-      where: eq(notificationChannels.id, channelId),
-    });
+    const channel = await app.db.query.notificationChannels.findFirst({ where: eq(notificationChannels.id, channelId) });
     if (!channel) return reply.code(404).send({ error: "Channel not found" });
-
-    const testPayload: NotificationPayload = {
-      deviceName: "Test Device",
-      deviceIp: "192.168.1.1",
-      alertType: "Test Alert",
-      severity: "low",
-      timestamp: new Date().toISOString(),
-      metricValue: "0",
-      incidentUrl: "#",
-      incidentId: "test",
-    };
-
-    try {
-      await dispatchNotification(channel as any, testPayload);
-      return { ok: true, message: `Test sent to ${channel.type} channel "${channel.name}"` };
-    } catch (err: any) {
-      return reply.code(500).send({ error: `Test failed: ${err.message}` });
-    }
+    const payload = { deviceName: "Test Device", deviceIp: "192.0.2.1", alertType: "Test Alert", severity: "low", timestamp: new Date().toISOString(), metricValue: "0", incidentUrl: `${process.env.WEB_ORIGIN ?? "http://localhost:3000"}/notifications`, incidentId: randomUUID(), event: "test" };
+    const [record] = await app.db.insert(notifications).values({ channelId, channelType: channel.type, payload }).returning();
+    await deliverRecord(app, record.id);
+    const result = await app.db.query.notifications.findFirst({ where: eq(notifications.id, record.id) });
+    if (result?.status !== "sent") return reply.code(502).send({ error: result?.error ?? "Delivery failed", notificationId: record.id });
+    return { ok: true, notificationId: record.id };
   });
-
-  // Notification history
-  app.get("/history", { preHandler: [authenticate] }, async (request) => {
-    const query = request.query as { page?: string; limit?: string };
-    const page = parseInt(query.page || "1", 10);
-    const limit = Math.min(parseInt(query.limit || "50", 10), 200);
-    const offset = (page - 1) * limit;
-
-    return app.db.select()
-      .from(notifications)
-      .orderBy(desc(notifications.createdAt))
-      .limit(limit)
-      .offset(offset);
+  app.get("/history", { preHandler: [authenticate] }, async request => {
+    const { page, limit, offset } = pagination(request.query);
+    const where = request.userDeviceIds === null ? undefined : inArray(notifications.incidentId, app.db.select({ id: incidents.id }).from(incidents).where(deviceScope(request, incidents.deviceId)));
+    const [data, [count]] = await Promise.all([app.db.select().from(notifications).where(where).orderBy(desc(notifications.createdAt)).limit(limit).offset(offset), app.db.select({ total: sql<number>`count(*)` }).from(notifications).where(where)]);
+    return pageResult(data, page, limit, Number(count.total));
   });
 }

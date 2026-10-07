@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ContentLayout from "@cloudscape-design/components/content-layout";
 import Header from "@cloudscape-design/components/header";
@@ -11,10 +11,10 @@ import Select from "@cloudscape-design/components/select";
 import Toggle from "@cloudscape-design/components/toggle";
 import Button from "@cloudscape-design/components/button";
 import SpaceBetween from "@cloudscape-design/components/space-between";
+import ExpandableSection from "@cloudscape-design/components/expandable-section";
 import Container from "@cloudscape-design/components/container";
 import Alert from "@cloudscape-design/components/alert";
 import TokenGroup from "@cloudscape-design/components/token-group";
-import BreadcrumbGroup from "@cloudscape-design/components/breadcrumb-group";
 import Box from "@cloudscape-design/components/box";
 import Spinner from "@cloudscape-design/components/spinner";
 import type { SelectProps } from "@cloudscape-design/components/select";
@@ -22,6 +22,7 @@ import { apiPut } from "@/lib/api";
 import { useApi } from "@/hooks/use-api";
 import { useNotifications } from "@/hooks/use-notifications";
 import { useI18n } from "@/lib/i18n";
+import { DeviceConnectionFields, connectionState, connectionPayload } from "@/components/common/device-connection-fields";
 import type { Device } from "@/lib/types";
 
 const DEVICE_TYPE_OPTIONS: SelectProps.Option[] = [
@@ -70,11 +71,15 @@ export default function EditDevicePage() {
   const { data: device, loading: fetching, error: fetchError } = useApi<Device>(`/api/devices/${id}`);
 
   const [form, setForm] = useState<FormState | null>(null);
+  const [connection, setConnection] = useState(connectionState());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const initialized = useRef<string | null>(null);
   useEffect(() => {
-    if (!device) return;
+    if (!device || initialized.current === device.id) return;
+    initialized.current = device.id;
+    setConnection(connectionState(device));
     setForm({
       name: device.name,
       ip: device.ip,
@@ -128,6 +133,7 @@ export default function EditDevicePage() {
         latitude: form.latitude ? Number(form.latitude) : undefined,
         longitude: form.longitude ? Number(form.longitude) : undefined,
         tags: form.tags,
+        ...connectionPayload(connection, form.snmpVersion?.value),
       };
       await apiPut<Device>(`/api/devices/${id}`, body);
       addNotification({ type: "success", content: "Device updated successfully." });
@@ -136,6 +142,14 @@ export default function EditDevicePage() {
       setError(err instanceof Error ? err.message : "Failed to update device.");
       setSubmitting(false);
     }
+  }
+
+  if (fetchError) {
+    return (
+      <ContentLayout header={<Header variant="h1">{t("page.devices.edit")}</Header>}>
+        <Alert type="error">{fetchError}</Alert>
+      </ContentLayout>
+    );
   }
 
   if (fetching || !form) {
@@ -148,29 +162,10 @@ export default function EditDevicePage() {
     );
   }
 
-  if (fetchError) {
-    return (
-      <ContentLayout header={<Header variant="h1">{t("page.devices.edit")}</Header>}>
-        <Alert type="error">{fetchError}</Alert>
-      </ContentLayout>
-    );
-  }
 
   return (
     <ContentLayout header={<Header variant="h1">{t("page.devices.edit")}</Header>}>
       <SpaceBetween size="l">
-        <BreadcrumbGroup
-          items={[
-            { text: "NetPulse", href: "/dashboard" },
-            { text: "Devices", href: "/devices" },
-            { text: device?.name ?? "Device", href: `/devices/${id}` },
-            { text: "Edit", href: `/devices/${id}/edit` },
-          ]}
-          onFollow={(e) => {
-            e.preventDefault();
-            router.push(e.detail.href);
-          }}
-        />
 
         <form
           onSubmit={(e) => {
@@ -200,25 +195,25 @@ export default function EditDevicePage() {
 
               <Container header={<Header variant="h2">{t("device.basicInfo")}</Header>}>
                 <SpaceBetween size="l">
-                  <FormField label={t("common.name")} constraintText="Required">
+                  <FormField label={t("common.name")} constraintText={t("Required")}>
                     <Input
                       value={form.name}
                       onChange={({ detail }) => update("name", detail.value)}
-                      placeholder="core-router-01"
+                      placeholder={t("core-router-01")}
                     />
                   </FormField>
-                  <FormField label={t("device.ip")} constraintText="Required">
+                  <FormField label={t("device.ip")} constraintText={t("Required")}>
                     <Input
                       value={form.ip}
                       onChange={({ detail }) => update("ip", detail.value)}
                       placeholder="192.168.1.1"
                     />
                   </FormField>
-                  <FormField label={t("common.type")} constraintText="Required">
+                  <FormField label={t("common.type")} constraintText={t("Required")}>
                     <Select
-                      selectedOption={form.type}
+                      selectedOption={form.type ? { ...form.type, label: t(`deviceType.${form.type.value}`) } : null}
                       onChange={({ detail }) => update("type", detail.selectedOption)}
-                      options={DEVICE_TYPE_OPTIONS}
+                      options={DEVICE_TYPE_OPTIONS.map(option => ({ ...option, label: t(`deviceType.${option.value}`) }))}
                       placeholder={t("device.selectType")}
                     />
                   </FormField>
@@ -226,7 +221,7 @@ export default function EditDevicePage() {
                     <Input
                       value={form.location}
                       onChange={({ detail }) => update("location", detail.value)}
-                      placeholder="Data Center A, Rack 12"
+                      placeholder={t("Data Center A, Rack 12")}
                     />
                   </FormField>
                 </SpaceBetween>
@@ -246,7 +241,7 @@ export default function EditDevicePage() {
                     <Input
                       value={form.snmpCommunity}
                       onChange={({ detail }) => update("snmpCommunity", detail.value)}
-                      placeholder="public"
+                      placeholder={t("public")}
                     />
                   </FormField>
                   <FormField label={t("device.snmpPort")}>
@@ -260,9 +255,13 @@ export default function EditDevicePage() {
                 </SpaceBetween>
               </Container>
 
-              <Container header={<Header variant="h2">{t("device.pollingInterval")}</Header>}>
+              <Container header={<Header variant="h2">{t("Connection settings")}</Header>}>
+              <DeviceConnectionFields value={connection} onChange={setConnection} version={form.snmpVersion?.value} editing={true} />
+            </Container>
+
+            <Container header={<Header variant="h2">{t("device.pollingInterval")}</Header>}>
                 <SpaceBetween size="l">
-                  <FormField label={t("device.pollingInterval")} constraintText="Minimum 30 seconds">
+                  <FormField label={t("device.pollingInterval")} constraintText={t("Minimum 30 seconds")}>
                     <Input
                       value={form.pollingInterval}
                       onChange={({ detail }) => update("pollingInterval", detail.value)}
@@ -281,9 +280,9 @@ export default function EditDevicePage() {
                 </SpaceBetween>
               </Container>
 
-              <Container header={<Header variant="h2">{t("device.coordinates")}</Header>}>
+              <ExpandableSection variant="container" headerText={t("device.coordinates")} >
                 <SpaceBetween size="l">
-                  <FormField label={t("device.latitude")} description="Optional">
+                  <FormField label={t("device.latitude")} description={t("Optional")}>
                     <Input
                       value={form.latitude}
                       onChange={({ detail }) => update("latitude", detail.value)}
@@ -291,7 +290,7 @@ export default function EditDevicePage() {
                       placeholder="37.5665"
                     />
                   </FormField>
-                  <FormField label={t("device.longitude")} description="Optional">
+                  <FormField label={t("device.longitude")} description={t("Optional")}>
                     <Input
                       value={form.longitude}
                       onChange={({ detail }) => update("longitude", detail.value)}
@@ -300,17 +299,17 @@ export default function EditDevicePage() {
                     />
                   </FormField>
                 </SpaceBetween>
-              </Container>
+              </ExpandableSection>
 
-              <Container header={<Header variant="h2">{t("device.tags")}</Header>}>
+              <ExpandableSection variant="container" headerText={t("device.tags")} >
                 <SpaceBetween size="l">
-                  <FormField label={t("device.addTag")} description="Press Enter to add a tag">
+                  <FormField label={t("device.addTag")} description={t("Press Enter to add a tag")}>
                     <SpaceBetween direction="horizontal" size="xs">
                       <Input
                         value={form.tagInput}
                         onChange={({ detail }) => update("tagInput", detail.value)}
                         onKeyDown={({ detail }) => handleTagKeyDown(detail.key)}
-                        placeholder="production"
+                        placeholder={t("production")}
                       />
                       <Button onClick={handleAddTag} iconName="add-plus">
                         {t("device.addTag")}
@@ -328,7 +327,7 @@ export default function EditDevicePage() {
                     />
                   )}
                 </SpaceBetween>
-              </Container>
+              </ExpandableSection>
             </SpaceBetween>
           </Form>
         </form>

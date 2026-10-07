@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Alert from "@cloudscape-design/components/alert";
+import Button from "@cloudscape-design/components/button";
+import { canVisit } from "@/lib/permissions";
+import { useRouter, usePathname } from "next/navigation";
 import AppLayout from "@cloudscape-design/components/app-layout";
 import BreadcrumbGroup from "@cloudscape-design/components/breadcrumb-group";
 import Flashbar from "@cloudscape-design/components/flashbar";
@@ -17,6 +20,7 @@ import { NotificationProvider, useNotifications } from "@/hooks/use-notification
 import { TopNav } from "@/components/top-nav";
 import { Navigation } from "@/components/navigation";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
+import { consoleRoute } from "@/lib/console-routes";
 
 const CLOUDSCAPE_MESSAGES = { ko: [koMessages], en: [enMessages] } as const;
 
@@ -43,12 +47,13 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     }
   }, [setupChecked, loading, user, router]);
 
+  const userId = user?.id;
   useEffect(() => {
-    if (user) {
+    if (userId) {
       connectSocket();
       return () => disconnectSocket();
     }
-  }, [user]);
+  }, [userId]);
 
   if (loading || !setupChecked) return null;
   if (!user) return null;
@@ -66,26 +71,50 @@ function CloudscapeLocaleWrapper({ children }: { children: React.ReactNode }) {
 }
 
 function AppShell({ children }: { children: React.ReactNode }) {
-  const { items } = useNotifications();
+  const { t } = useI18n();
+  const { user } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+  const { items, addNotification } = useNotifications();
+  useEffect(() => {
+    const onError = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const detail: unknown = event.detail;
+      if (!detail || typeof detail !== "object" || !("message" in detail)) return;
+      addNotification({ type: "error", content: String(detail.message), action: <Button onClick={() => window.dispatchEvent(new Event("focus"))}>{t("Retry")}</Button> });
+    };
+    window.addEventListener("netpulse:api-error", onError);
+    return () => window.removeEventListener("netpulse:api-error", onError);
+  }, [addNotification, t]);
   const { siteName } = useSite();
-  const [navOpen, setNavOpen] = useState(true);
+  const route = consoleRoute(pathname, siteName, t);
+  const [navOpen, setNavOpen] = useState(!route.form);
+  useEffect(() => {
+    const desktop = window.matchMedia("(min-width: 769px)");
+    const update = () => setNavOpen(!route.form && desktop.matches);
+    update();
+    desktop.addEventListener("change", update);
+    return () => desktop.removeEventListener("change", update);
+  }, [route.form]);
 
   return (
     <>
       <TopNav />
       <AppLayout
+        contentType={route.contentType}
+        maxContentWidth={route.form ? 960 : undefined}
         navigation={<Navigation />}
         navigationOpen={navOpen}
         onNavigationChange={({ detail }) => setNavOpen(detail.open)}
         notifications={<Flashbar items={items} />}
         breadcrumbs={
           <BreadcrumbGroup
-            items={[{ text: siteName, href: "/dashboard" }]}
-            onFollow={(e) => e.preventDefault()}
+            items={route.breadcrumbs}
+            onFollow={(event) => { event.preventDefault(); router.push(event.detail.href); }}
           />
         }
         toolsHide={true}
-        content={children}
+        content={canVisit(pathname, user) ? children : <Alert type="error" header={t("Access denied")} action={<Button onClick={() => router.push("/dashboard")}>{t("Return to dashboard")}</Button>}>{t("Your current role or resource scope does not allow this page.")}</Alert>}
       />
     </>
   );

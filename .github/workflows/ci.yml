@@ -35,6 +35,8 @@ jobs:
       - run: yarn install --frozen-lockfile
       - name: Build all packages
         run: yarn build
+      - name: Lint
+        run: yarn lint
 
   test:
     name: 🧪 Test
@@ -48,7 +50,7 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - name: Run tests
-        run: NO_COLOR=1 npx vitest run --reporter=verbose 2>&1 | tee test-output.txt
+        run: NO_COLOR=1 yarn test --reporter=verbose 2>&1 | tee test-output.txt
       - name: Test Summary
         if: always()
         run: |
@@ -57,3 +59,79 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           tail -5 test-output.txt | sed 's/\x1b\[[0-9;]*m//g' >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+  integration:
+    name: API, monitoring and migration regression
+    needs: install
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: netpulse
+          POSTGRES_PASSWORD: ci-disposable-password
+          POSTGRES_DB: netpulse_qa
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U netpulse"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://netpulse:ci-disposable-password@127.0.0.1:5432/netpulse_qa
+      TEST_DATABASE_URL: postgresql://netpulse:ci-disposable-password@127.0.0.1:5432/netpulse_qa
+      REDIS_URL: redis://127.0.0.1:6379
+      TEST_REDIS_URL: redis://127.0.0.1:6379
+      NEXTAUTH_SECRET: ci-disposable-jwt-secret
+      SNMP_TRAP_PORT: "1162"
+      TEST_OUTPUT_DIR: /tmp/netpulse-ci
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: yarn db:migrate
+      - name: Start API and wait for workers
+        run: |
+          node --import tsx apps/api/src/index.ts > /tmp/netpulse-ci-api.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:4000/api/health; then exit 0; fi
+            sleep 1
+          done
+          tail -50 /tmp/netpulse-ci-api.log
+          exit 1
+      - run: yarn test:integration
+      - run: yarn test:monitoring
+      - run: yarn test:ssh
+      - run: yarn test:features
+      - name: Install browser test runtime
+        run: yarn playwright install --with-deps chromium
+      - name: Build and start web with mock integrations
+        run: |
+          yarn workspace @netpulse/web build
+          node scripts/mock-services.mjs > /tmp/netpulse-ci-mock.log 2>&1 &
+          yarn workspace @netpulse/web start --port 3000 > /tmp/netpulse-ci-web.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://localhost:3000/login > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          tail -50 /tmp/netpulse-ci-web.log
+          exit 1
+      - run: yarn test:e2e
+        env:
+          TEST_WEB_URL: http://localhost:3000
+      - name: Prepare legacy upgrade database
+        run: node --input-type=module -e "import postgres from 'postgres'; const db=postgres(process.env.DATABASE_URL); await db.unsafe('CREATE DATABASE netpulse_upgrade'); await db.end();"
+      - run: yarn test:upgrade
+        env:
+          TEST_DATABASE_URL: postgresql://netpulse:ci-disposable-password@127.0.0.1:5432/netpulse_upgrade
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sanitized-regression-results
+          path: /tmp/netpulse-ci/*-results.json

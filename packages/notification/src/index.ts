@@ -1,4 +1,23 @@
 import nodemailer from "nodemailer";
+import { z } from "zod";
+
+const httpUrl = z.string().url().refine(value => ["http:", "https:"].includes(new URL(value).protocol), "Use an HTTP or HTTPS URL");
+export const notificationTransportSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("email"), config: z.object({ smtp: z.object({ host: z.string().min(1), port: z.number().int().min(1).max(65535), user: z.string().min(1), pass: z.string().min(1), from: z.string().email().optional() }), to: z.string().email() }) }),
+  z.object({ type: z.literal("telegram"), config: z.object({ botToken: z.string().min(1), chatId: z.string().min(1) }) }),
+  z.object({ type: z.literal("discord"), config: z.object({ webhookUrl: httpUrl }) }),
+  z.object({ type: z.literal("slack"), config: z.object({ webhookUrl: httpUrl }) }),
+  z.object({ type: z.literal("sms"), config: z.object({ twilio: z.object({ sid: z.string().min(1), token: z.string().min(1), from: z.string().min(1) }), to: z.string().min(1) }) }),
+  z.object({ type: z.literal("pagerduty"), config: z.object({ routingKey: z.string().min(1) }) }),
+  z.object({ type: z.literal("webhook"), config: z.object({ url: httpUrl, headers: z.record(z.string()).optional(), template: z.string().optional() }) }),
+  z.object({ type: z.literal("in_app"), config: z.object({}) }),
+]);
+
+async function checkedFetch(url: string, options: RequestInit) {
+  const response = await fetch(url, { ...options, signal: AbortSignal.timeout(15000) });
+  if (!response.ok) throw new Error(`Notification delivery rejected (HTTP ${response.status})`);
+  return response;
+}
 
 // ─── Types ───────────────────────────────────────────
 export interface NotificationPayload {
@@ -11,6 +30,8 @@ export interface NotificationPayload {
   aiSummary?: string;
   incidentUrl: string;
   incidentId: string;
+  event?: "trigger" | "resolved" | "escalated" | "test";
+  runbookUrl?: string;
 }
 
 export interface ChannelConfig {
@@ -28,7 +49,7 @@ const SEVERITY_COLORS: Record<string, { hex: string; emoji: string }> = {
 
 // ─── Email ───────────────────────────────────────────
 export async function sendEmail(
-  config: { host: string; port: number; user: string; pass: string },
+  config: { host: string; port: number; user: string; pass: string; from?: string },
   to: string,
   payload: NotificationPayload
 ) {
@@ -42,7 +63,7 @@ export async function sendEmail(
   const color = SEVERITY_COLORS[payload.severity] || SEVERITY_COLORS.medium;
 
   await transporter.sendMail({
-    from: config.user,
+    from: config.from ?? config.user,
     to,
     subject: `[${payload.severity.toUpperCase()}] ${payload.alertType} - ${payload.deviceName}`,
     html: `
@@ -78,7 +99,7 @@ export async function sendTelegram(botToken: string, chatId: string, payload: No
 *Time:* ${payload.timestamp}
 ${payload.aiSummary ? `\n*AI Analysis:* ${payload.aiSummary}` : ""}`;
 
-  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+  await checkedFetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -87,7 +108,6 @@ ${payload.aiSummary ? `\n*AI Analysis:* ${payload.aiSummary}` : ""}`;
       parse_mode: "Markdown",
       reply_markup: {
         inline_keyboard: [[
-          { text: "✅ Acknowledge", callback_data: `ack:${payload.incidentId}` },
           { text: "🔗 View Incident", url: payload.incidentUrl },
         ]],
       },
@@ -99,7 +119,7 @@ ${payload.aiSummary ? `\n*AI Analysis:* ${payload.aiSummary}` : ""}`;
 export async function sendDiscord(webhookUrl: string, payload: NotificationPayload) {
   const color = parseInt(SEVERITY_COLORS[payload.severity]?.hex.replace("#", "") || "CCCCCC", 16);
 
-  await fetch(webhookUrl, {
+  await checkedFetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -121,7 +141,7 @@ export async function sendDiscord(webhookUrl: string, payload: NotificationPaylo
 
 // ─── Slack ───────────────────────────────────────────
 export async function sendSlack(webhookUrl: string, payload: NotificationPayload) {
-  await fetch(webhookUrl, {
+  await checkedFetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -159,7 +179,7 @@ export async function sendSMS(config: { sid: string; token: string; from: string
   const body = `[${payload.severity.toUpperCase()}] ${payload.alertType} - ${payload.deviceName} (${payload.deviceIp}) Value: ${payload.metricValue}`;
 
   const params = new URLSearchParams({ To: to, From: config.from, Body: body });
-  await fetch(`https://api.twilio.com/2010-04-01/Accounts/${config.sid}/Messages.json`, {
+  await checkedFetch(`https://api.twilio.com/2010-04-01/Accounts/${config.sid}/Messages.json`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -171,7 +191,7 @@ export async function sendSMS(config: { sid: string; token: string; from: string
 
 // ─── PagerDuty ───────────────────────────────────────
 export async function sendPagerDuty(routingKey: string, payload: NotificationPayload, action: "trigger" | "resolve" = "trigger") {
-  await fetch("https://events.pagerduty.com/v2/enqueue", {
+  await checkedFetch("https://events.pagerduty.com/v2/enqueue", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -200,10 +220,10 @@ export async function sendWebhook(
   payload: NotificationPayload
 ) {
   const body = config.template
-    ? config.template.replace(/\{\{(\w+)\}\}/g, (_, key) => (payload as any)[key] || "")
+    ? config.template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(Object.entries(payload).find(([field]) => field === key)?.[1] ?? ""))
     : JSON.stringify(payload);
 
-  await fetch(config.url, {
+  await checkedFetch(config.url, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...config.headers },
     body,
@@ -214,31 +234,32 @@ export async function sendWebhook(
 /**
  * Send notification to a specific channel.
  */
-export async function dispatchNotification(channel: ChannelConfig, payload: NotificationPayload): Promise<void> {
-  const cfg = channel.config as any;
+export async function dispatchNotification(input: ChannelConfig, payload: NotificationPayload): Promise<void> {
+  if (!notificationTransportSchema.options.some(option => option.shape.type.value === input.type)) throw new Error(`Unsupported notification channel type: ${input.type}`);
+  const channel = notificationTransportSchema.parse(input);
   switch (channel.type) {
     case "email":
-      await sendEmail(cfg.smtp, cfg.to, payload);
+      await sendEmail(channel.config.smtp, channel.config.to, payload);
       break;
     case "telegram":
-      await sendTelegram(cfg.botToken, cfg.chatId, payload);
+      await sendTelegram(channel.config.botToken, channel.config.chatId, payload);
       break;
     case "discord":
-      await sendDiscord(cfg.webhookUrl, payload);
+      await sendDiscord(channel.config.webhookUrl, payload);
       break;
     case "slack":
-      await sendSlack(cfg.webhookUrl, payload);
+      await sendSlack(channel.config.webhookUrl, payload);
       break;
     case "sms":
-      await sendSMS(cfg.twilio, cfg.to, payload);
+      await sendSMS(channel.config.twilio, channel.config.to, payload);
       break;
     case "pagerduty":
-      await sendPagerDuty(cfg.routingKey, payload);
+      await sendPagerDuty(channel.config.routingKey, payload, payload.event === "resolved" ? "resolve" : "trigger");
       break;
     case "webhook":
-      await sendWebhook(cfg, payload);
+      await sendWebhook(channel.config, payload);
       break;
-    default:
-      console.warn(`Unknown notification channel type: ${channel.type}`);
+    case "in_app":
+      break;
   }
 }

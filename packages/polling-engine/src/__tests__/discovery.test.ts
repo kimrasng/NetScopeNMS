@@ -17,12 +17,14 @@ vi.mock("ping", () => ({
 }));
 
 const mockQueueAdd = vi.fn().mockResolvedValue(undefined);
+const mockSchedule = vi.fn().mockResolvedValue(undefined);
 const mockQueueClose = vi.fn().mockResolvedValue(undefined);
 const mockWorkerClose = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("bullmq", () => ({
   Queue: vi.fn().mockImplementation(() => ({
     add: mockQueueAdd,
+    upsertJobScheduler: mockSchedule,
     close: mockQueueClose,
   })),
   Worker: vi.fn().mockImplementation((_name: string, _processor: any) => ({
@@ -39,7 +41,7 @@ vi.mock("ioredis", () => ({
 }));
 
 const mockSelectLimit = vi.fn();
-const mockInsertValues = vi.fn().mockResolvedValue(undefined);
+const mockInsertValues = vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ id: "new-neighbor" }]), onConflictDoUpdate: vi.fn().mockResolvedValue(undefined) }));
 const mockSelectWhere = vi.fn(() => ({ limit: mockSelectLimit }));
 const mockSelectFrom = vi.fn(() => ({ where: mockSelectWhere }));
 const mockSelect = vi.fn(() => ({ from: mockSelectFrom }));
@@ -53,6 +55,7 @@ vi.mock("@netpulse/shared", () => ({
     },
   })),
   devices: { id: "id", ip: "ip", pollingEnabled: "polling_enabled" },
+  topologyEdges: { sourceDeviceId: "source", targetDeviceId: "target", sourcePort: "port" },
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -281,7 +284,7 @@ describe("DiscoveryEngine", () => {
       expect(result.neighborsFound[0].isNew).toBe(false);
       expect(result.alreadyKnown).toBe(1);
       expect(result.newDevicesCreated).toBe(0);
-      expect(mockInsert).not.toHaveBeenCalled();
+      expect(mockInsertValues).toHaveBeenCalledWith(expect.objectContaining({ targetDeviceId: "existing-device-id" }));
     });
 
     it("does not create duplicate entries for same IP from LLDP and ARP", async () => {
@@ -519,27 +522,14 @@ describe("DiscoveryEngine", () => {
 
       expect(queue).toBeDefined();
       expect(worker).toBeDefined();
-      expect(mockQueueAdd).toHaveBeenCalledWith(
-        "full-discovery",
-        {},
-        expect.objectContaining({
-          repeat: { every: 3600000 },
-          jobId: "scheduled-full-discovery",
-        }),
-      );
+      expect(mockSchedule).toHaveBeenCalledWith("scheduled-full-discovery", { every: 3600000 }, expect.objectContaining({ name: "full-discovery", data: {} }));
     });
 
     it("uses custom discovery interval", () => {
       const engine = new DiscoveryEngine({ ...defaultConfig, discoveryInterval: 600 });
       engine.start();
 
-      expect(mockQueueAdd).toHaveBeenCalledWith(
-        "full-discovery",
-        {},
-        expect.objectContaining({
-          repeat: { every: 600000 },
-        }),
-      );
+      expect(mockSchedule).toHaveBeenCalledWith("scheduled-full-discovery", { every: 600000 }, expect.objectContaining({ name: "full-discovery" }));
     });
 
     it("cleans up on shutdown", async () => {

@@ -10,16 +10,25 @@
     "test": "vitest run",
     "clean": "rm -rf dist",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "lint": "tsc --noEmit",
+    "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.38.0",
     "postgres": "^3.4.5",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "dotenv": "^16.4.0"
   },
   "devDependencies": {
     "drizzle-kit": "^0.30.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./contracts": "./src/contracts.ts",
+    "./environment": "./src/env.ts"
   }
 }

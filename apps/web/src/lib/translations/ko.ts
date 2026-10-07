@@ -2,7 +2,7 @@ export const ko: Record<string, string> = {
   // Navigation
   "nav.monitoring": "모니터링",
   "nav.dashboard": "대시보드",
-  "nav.devices": "디바이스",
+  "nav.devices": "장비",
   "nav.incidents": "인시던트",
   "nav.topology": "토폴로지",
   "nav.network": "네트워크",
@@ -33,9 +33,9 @@ export const ko: Record<string, string> = {
 
   // Page Titles
   "page.dashboard": "대시보드",
-  "page.devices": "디바이스",
-  "page.devices.create": "디바이스 추가",
-  "page.devices.edit": "디바이스 편집",
+  "page.devices": "장비",
+  "page.devices.create": "장비 추가",
+  "page.devices.edit": "장비 편집",
   "page.incidents": "인시던트",
   "page.topology": "네트워크 토폴로지",
   "page.maps": "지리 맵",
@@ -121,7 +121,7 @@ export const ko: Record<string, string> = {
   // Dashboard
   "dashboard.summary": "요약",
   "dashboard.throughput": "트래픽 처리량",
-  "dashboard.topDevices": "상위 디바이스",
+  "dashboard.topDevices": "상위 장비",
   "dashboard.recentAlerts": "최근 알림",
   "dashboard.devicesUp": "정상",
   "dashboard.devicesDown": "다운",
@@ -132,9 +132,9 @@ export const ko: Record<string, string> = {
   "dashboard.incidentsProblem": "문제",
   "dashboard.incidentsAcknowledged": "확인됨",
   "dashboard.incidentsResolvedToday": "오늘 해결",
-  "dashboard.deviceStatus": "디바이스 상태",
+  "dashboard.deviceStatus": "장비 상태",
   "dashboard.incidentStatus": "인시던트 상태",
-  "dashboard.totalDevices": "전체 디바이스",
+  "dashboard.totalDevices": "전체 장비",
   "dashboard.bandwidthIn": "수신 대역폭",
   "dashboard.bandwidthOut": "송신 대역폭",
   "dashboard.metric": "메트릭",
@@ -165,15 +165,15 @@ export const ko: Record<string, string> = {
   "device.coordinates": "좌표",
   "device.addTag": "태그 추가",
   "device.tagPlaceholder": "태그를 입력하세요",
-  "device.filterDevices": "디바이스 검색",
+  "device.filterDevices": "장비 검색",
   "device.allTypes": "모든 유형",
   "device.allStatuses": "모든 상태",
-  "device.createDevice": "디바이스 추가",
-  "device.editDevice": "디바이스 편집",
-  "device.deleteConfirm": "이 디바이스를 삭제하시겠습니까?",
-  "device.created": "디바이스가 생성되었습니다",
-  "device.updated": "디바이스가 수정되었습니다",
-  "device.deleted": "디바이스가 삭제되었습니다",
+  "device.createDevice": "장비 추가",
+  "device.editDevice": "장비 편집",
+  "device.deleteConfirm": "이 장비를 삭제하시겠습니까?",
+  "device.created": "장비가 생성되었습니다",
+  "device.updated": "장비가 수정되었습니다",
+  "device.deleted": "장비가 삭제되었습니다",
   "device.speed": "속도",
   "device.inBps": "수신 (bps)",
   "device.outBps": "송신 (bps)",
@@ -199,7 +199,7 @@ export const ko: Record<string, string> = {
   // Incidents
   "incident.severity": "심각도",
   "incident.title": "제목",
-  "incident.device": "디바이스",
+  "incident.device": "장비",
   "incident.startedAt": "시작 시간",
   "incident.acknowledge": "확인",
   "incident.resolve": "해결",
@@ -224,8 +224,8 @@ export const ko: Record<string, string> = {
   "incident.resolvedMsg": "인시던트가 해결되었습니다",
   "incident.commentAdded": "코멘트가 추가되었습니다",
   "incident.analysisRequested": "AI 분석이 요청되었습니다",
-  "incident.deviceName": "디바이스명",
-  "incident.deviceIp": "디바이스 IP",
+  "incident.deviceName": "장비명",
+  "incident.deviceIp": "장비 IP",
 
   // Status
   "status.up": "정상",
@@ -249,7 +249,7 @@ export const ko: Record<string, string> = {
   "alertRule.operator": "연산자",
   "alertRule.threshold": "임계값",
   "alertRule.severity": "심각도",
-  "alertRule.device": "디바이스",
+  "alertRule.device": "장비",
   "alertRule.group": "그룹",
   "alertRule.enabled": "활성",
   "alertRule.channels": "알림 채널",
@@ -297,7 +297,7 @@ export const ko: Record<string, string> = {
   "channelType.in_app": "인앱",
 
   // Metrics
-  "metrics.deviceId": "디바이스 ID",
+  "metrics.deviceId": "장비 ID",
   "metrics.metric": "메트릭",
   "metrics.timeRange": "시간 범위",
   "metrics.bucket": "버킷",
@@ -308,7 +308,7 @@ export const ko: Record<string, string> = {
   "metrics.max": "최대",
   "metrics.min": "최소",
   "metrics.noData": "메트릭 데이터가 없습니다",
-  "metrics.selectDevice": "디바이스를 선택하세요",
+  "metrics.selectDevice": "장비를 선택하세요",
   "metrics.selectMetric": "메트릭을 선택하세요",
   "metrics.1h": "1시간",
   "metrics.6h": "6시간",
@@ -328,7 +328,7 @@ export const ko: Record<string, string> = {
   "maintenance.endAt": "종료 시간",
   "maintenance.recurring": "반복",
   "maintenance.cronExpression": "Cron 표현식",
-  "maintenance.devices": "디바이스",
+  "maintenance.devices": "장비",
   "maintenance.groups": "그룹",
   "maintenance.createWindow": "유지보수 윈도우 생성",
   "maintenance.editWindow": "유지보수 윈도우 편집",
@@ -342,7 +342,7 @@ export const ko: Record<string, string> = {
   "maintenance.statusLabel": "상태",
 
   // Config Snapshots
-  "configSnapshot.device": "디바이스",
+  "configSnapshot.device": "장비",
   "configSnapshot.hash": "해시",
   "configSnapshot.capturedAt": "캡처 시간",
   "configSnapshot.configText": "설정 내용",
@@ -467,7 +467,7 @@ export const ko: Record<string, string> = {
 
   // Topology & Maps
   "topology.placeholder": "네트워크 토폴로지 시각화가 곧 제공됩니다. ReactFlow를 사용한 인터랙티브 네트워크 다이어그램이 표시될 예정입니다.",
-  "maps.placeholder": "지리적 디바이스 맵이 곧 제공됩니다. Leaflet을 사용한 인터랙티브 지도가 표시될 예정입니다.",
+  "maps.placeholder": "지리적 장비 맵이 곧 제공됩니다. Leaflet을 사용한 인터랙티브 지도가 표시될 예정입니다.",
 
   // Profile
   "profile.info": "프로필 정보",

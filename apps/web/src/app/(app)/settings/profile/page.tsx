@@ -3,6 +3,8 @@
 import { useState } from "react";
 import ContentLayout from "@cloudscape-design/components/content-layout";
 import Header from "@cloudscape-design/components/header";
+import Box from "@cloudscape-design/components/box";
+import ColumnLayout from "@cloudscape-design/components/column-layout";
 import Container from "@cloudscape-design/components/container";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import Form from "@cloudscape-design/components/form";
@@ -11,7 +13,7 @@ import Input from "@cloudscape-design/components/input";
 import Button from "@cloudscape-design/components/button";
 import Alert from "@cloudscape-design/components/alert";
 import { useAuth } from "@/lib/auth";
-import { apiPut } from "@/lib/api";
+import { apiPut, clearToken } from "@/lib/api";
 import { useNotifications } from "@/hooks/use-notifications";
 import { useI18n } from "@/lib/i18n";
 
@@ -61,11 +63,13 @@ export default function ProfilePage() {
     try {
       await apiPut("/api/auth/password", { currentPassword, newPassword });
       addNotification({ type: "success", content: t("profile.passwordChanged") });
+      clearToken();
+      window.location.assign("/login");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err: unknown) {
-      addNotification({ type: "error", content: err instanceof Error ? err.message : "Failed to change password" });
+      setPasswordError(err instanceof Error ? err.message : t("Failed to change password"));
     } finally {
       setPasswordLoading(false);
     }
@@ -84,12 +88,7 @@ export default function ProfilePage() {
           >
             <Container header={<Header variant="h2">{t("profile.info")}</Header>}>
               <SpaceBetween size="l">
-                <FormField label={t("common.email")}>
-                  <Input value={user?.email ?? ""} disabled={true} />
-                </FormField>
-                <FormField label={t("common.role")}>
-                  <Input value={user?.role ?? ""} disabled={true} />
-                </FormField>
+                <ColumnLayout columns={2} variant="text-grid"><div><Box variant="awsui-key-label">{t("common.email")}</Box><Box>{user?.email}</Box></div><div><Box variant="awsui-key-label">{t("common.role")}</Box><Box>{t(`role.${user?.role}`)}</Box></div></ColumnLayout>
                 <FormField label={t("common.name")}>
                   <Input value={name} onChange={({ detail }) => setName(detail.value)} />
                 </FormField>

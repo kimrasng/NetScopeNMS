@@ -26,7 +26,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       dismissible: true,
       onDismiss: () => setItems((prev) => prev.filter((i) => i.id !== id)),
     };
-    setItems((prev) => [newItem, ...prev]);
+    setItems((prev) => [newItem, ...prev.filter(existing => existing.content !== item.content)].slice(0, 5));
 
     if (item.type !== "error") {
       setTimeout(() => {

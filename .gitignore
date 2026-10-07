@@ -24,6 +24,12 @@ yarn-error.log*
 
 # Test coverage
 coverage
+playwright-report
+test-results
+
+# Local QA and design evidence (screenshots, browser captures, run artifacts)
+/docs/qa/**/evidence/
+/docs/design/**/evidence/
 
 # OS files
 .DS_Store

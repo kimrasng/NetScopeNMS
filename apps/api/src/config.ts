@@ -1,4 +1,5 @@
-import "dotenv/config";
+import "@netpulse/shared/environment";
+import { snmpV3Schema } from "@netpulse/shared";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -19,6 +20,12 @@ export const config = {
   redisUrl: process.env.REDIS_URL || "redis://localhost:6379",
   jwtSecret: requireEnv("NEXTAUTH_SECRET", "dev-secret-change-me-not-for-production"),
   corsOrigin: process.env.CORS_ORIGIN || "http://localhost:3000",
+  trapEnabled: process.env.SNMP_TRAP_ENABLED !== "false",
+  trapPort: Number(process.env.SNMP_TRAP_PORT ?? 1162),
+  trapCommunity: process.env.SNMP_TRAP_COMMUNITY ?? "public",
+  trapUsers: snmpV3Schema.array().parse(JSON.parse(process.env.SNMP_TRAP_USERS ?? "[]")),
+  discoveryEnabled: process.env.DISCOVERY_ENABLED !== "false",
+  discoveryInterval: Number(process.env.DISCOVERY_INTERVAL ?? 3600),
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
   smtp: {
     host: process.env.SMTP_HOST || "",

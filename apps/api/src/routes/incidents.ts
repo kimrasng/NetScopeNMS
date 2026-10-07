@@ -1,8 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { eq, and, sql, desc, inArray } from "drizzle-orm";
-import { incidents, incidentEvents, devices } from "@netpulse/shared";
-import { authenticate } from "../middleware/auth.js";
+import { eq, and, sql, desc, ne, inArray } from "drizzle-orm";
+import { incidents, incidentEvents, devices, alertRules, users } from "@netpulse/shared";
+import { authenticate, requireRole } from "../middleware/auth.js";
+import { deviceScope } from "../services/access.js";
+import { emitDeviceEvent } from "../services/realtime.js";
+import { generateIncidentRca } from "../services/ai.js";
+import { HttpError } from "../services/access.js";
+import { enqueueDeliveries } from "../services/delivery.js";
+import { refreshDeviceStatus } from "../services/device-status.js";
 import { logAudit } from "./audit-logs.js";
 
 const acknowledgeSchema = z.object({
@@ -24,18 +30,12 @@ export async function incidentRoutes(app: FastifyInstance) {
     const offset = (page - 1) * limit;
 
     const conditions = [];
-    if (query.status) conditions.push(eq(incidents.status, query.status as any));
-    if (query.severity) conditions.push(eq(incidents.severity, query.severity as any));
+    if (query.status === "active") conditions.push(ne(incidents.status, "resolved"));
+    else if (query.status) conditions.push(eq(incidents.status, z.enum(["problem", "acknowledged", "resolved"]).parse(query.status)));
+    if (query.severity) conditions.push(eq(incidents.severity, z.enum(["critical", "high", "medium", "low"]).parse(query.severity)));
     if (query.deviceId) conditions.push(eq(incidents.deviceId, query.deviceId));
 
-    // Scope-based access control for restricted users
-    if (request.userScope === "restricted") {
-      const deviceIdFilter = request.userAllowedDeviceIds || [];
-      if (deviceIdFilter.length === 0) {
-        return { data: [], pagination: { page, limit, total: 0, totalPages: 0 } };
-      }
-      conditions.push(inArray(incidents.deviceId, deviceIdFilter));
-    }
+    conditions.push(deviceScope(request, incidents.deviceId));
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -77,13 +77,16 @@ export async function incidentRoutes(app: FastifyInstance) {
       },
     });
     if (!incident) return reply.code(404).send({ error: "Incident not found" });
-    return incident;
+    const actorIds = [...new Set([incident.acknowledgedBy, ...incident.events.map(event => event.createdBy)].filter((actor): actor is string => !!actor))];
+    const actors = actorIds.length ? await app.db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, actorIds)) : [];
+    const names = new Map(actors.map(actor => [actor.id, actor.name]));
+    return { ...incident, acknowledgedByName: incident.acknowledgedBy ? names.get(incident.acknowledgedBy) ?? null : null, events: incident.events.map(event => ({ ...event, createdByName: event.createdBy ? names.get(event.createdBy) ?? null : null })) };
   });
 
   // Acknowledge incident
-  app.post("/:id/acknowledge", { preHandler: [authenticate] }, async (request, reply) => {
+  app.post("/:id/acknowledge", { preHandler: [requireRole("super_admin", "admin", "operator")] }, async (request) => {
     const { id } = request.params as { id: string };
-    const body = acknowledgeSchema.parse(request.body);
+    const body = acknowledgeSchema.parse(request.body ?? {});
 
     const [updated] = await app.db.update(incidents)
       .set({
@@ -92,10 +95,10 @@ export async function incidentRoutes(app: FastifyInstance) {
         acknowledgedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(incidents.id, id))
+      .where(and(eq(incidents.id, id), eq(incidents.status, "problem")))
       .returning();
 
-    if (!updated) return reply.code(404).send({ error: "Incident not found" });
+    if (!updated) throw new HttpError(409, "Only active problems can be acknowledged");
 
     await app.db.insert(incidentEvents).values({
       incidentId: id,
@@ -104,78 +107,35 @@ export async function incidentRoutes(app: FastifyInstance) {
       createdBy: request.userId!,
     });
 
-    await logAudit(app.db, { userId: request.userId!, action: "incident.acknowledge", resource: "incident", resourceId: id, ipAddress: request.ip });
-    app.io.emit("incident:updated", updated);
+    await logAudit(app.db, { userId: request.userId!, action: "incident.acknowledge", resource: "incident", resourceId: id, ipAddress: request.ip }, request);
+    await emitDeviceEvent(app, "incident:updated", updated.deviceId, updated);
     return updated;
   });
 
-  // Resolve incident
-  app.post("/:id/resolve", { preHandler: [authenticate] }, async (request, reply) => {
+  app.post("/:id/resolve", { preHandler: [requireRole("super_admin", "admin", "operator")] }, async request => {
     const { id } = request.params as { id: string };
-
-    const [updated] = await app.db.update(incidents)
-      .set({
-        status: "resolved",
-        resolvedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(incidents.id, id))
-      .returning();
-
-    if (!updated) return reply.code(404).send({ error: "Incident not found" });
-
-    await app.db.insert(incidentEvents).values({
-      incidentId: id,
-      type: "resolved",
-      message: "Incident resolved",
-      createdBy: request.userId!,
+    const updated = await app.db.transaction(async tx => {
+      const [incident] = await tx.update(incidents).set({ status: "resolved", resolvedAt: new Date(), updatedAt: new Date() }).where(and(eq(incidents.id, id), ne(incidents.status, "resolved"))).returning();
+      if (!incident) throw new HttpError(409, "Incident is already resolved");
+      await tx.insert(incidentEvents).values({ incidentId: id, type: "resolved", message: "Incident resolved manually", createdBy: request.userId });
+      const device = await tx.query.devices.findFirst({ where: eq(devices.id, incident.deviceId) });
+      const rule = incident.ruleId ? await tx.query.alertRules.findFirst({ where: eq(alertRules.id, incident.ruleId) }) : undefined;
+      if (device && rule) await enqueueDeliveries(tx, rule.channels ?? [], { deviceName: device.name, deviceIp: device.ip, alertType: incident.title, severity: incident.severity, timestamp: new Date().toISOString(), metricValue: String(incident.metricValue ?? ""), incidentUrl: `${process.env.WEB_ORIGIN ?? "http://localhost:3000"}/incidents/${id}`, incidentId: id, event: "resolved" }, "resolved");
+      return incident;
     });
-
-    await logAudit(app.db, { userId: request.userId!, action: "incident.resolve", resource: "incident", resourceId: id, ipAddress: request.ip });
-    app.io.emit("incident:updated", updated);
+    await refreshDeviceStatus(app, updated.deviceId);
+    await logAudit(app.db, { userId: request.userId, action: "incident.resolve", resource: "incident", resourceId: id, ipAddress: request.ip }, request);
+    await emitDeviceEvent(app, "incident:updated", updated.deviceId, updated);
     return updated;
   });
 
-  // Trigger AI analysis for incident
-  app.post("/:id/ai-analysis", { preHandler: [authenticate] }, async (request, reply) => {
+  app.post("/:id/ai-analysis", { preHandler: [requireRole("super_admin", "admin", "operator")] }, async (request) => {
     const { id } = request.params as { id: string };
-    const incident = await app.db.query.incidents.findFirst({
-      where: eq(incidents.id, id),
-      with: { device: true },
-    });
-    if (!incident) return reply.code(404).send({ error: "Incident not found" });
-
-    // Fetch recent metrics for context
-    const recentMetrics = await app.db.execute(sql`
-      SELECT metric_name, value, timestamp
-      FROM metrics
-      WHERE device_id = ${incident.deviceId}
-        AND timestamp >= NOW() - INTERVAL '60 minutes'
-      ORDER BY timestamp DESC
-      LIMIT 100
-    `);
-
-    // TODO: Call AI engine for RCA
-    // For now return placeholder
-    const aiRca = `AI Analysis pending - Device: ${incident.device?.name}, Metric: ${incident.metricName}, Value: ${incident.metricValue}`;
-
-    const [updated] = await app.db.update(incidents)
-      .set({ aiRca, updatedAt: new Date() })
-      .where(eq(incidents.id, id))
-      .returning();
-
-    await app.db.insert(incidentEvents).values({
-      incidentId: id,
-      type: "ai_analysis",
-      message: "AI root cause analysis generated",
-      metadata: { rca: aiRca },
-    });
-
-    return { ...updated, recentMetrics };
+    return (await generateIncidentRca(request, id)).updated;
   });
 
   // Add comment to incident
-  app.post("/:id/comments", { preHandler: [authenticate] }, async (request, _reply) => {
+  app.post("/:id/comments", { preHandler: [requireRole("super_admin", "admin", "operator")] }, async (request, _reply) => {
     const { id } = request.params as { id: string };
     const { message } = z.object({ message: z.string().min(1) }).parse(request.body);
 
@@ -186,7 +146,8 @@ export async function incidentRoutes(app: FastifyInstance) {
       createdBy: request.userId!,
     }).returning();
 
-    app.io.emit("incident:comment", { incidentId: id, event });
+    const incident = await app.db.query.incidents.findFirst({ where: eq(incidents.id, id) });
+    if (incident) await emitDeviceEvent(app, "incident:comment", incident.deviceId, { incidentId: id, event });
     return event;
   });
 }

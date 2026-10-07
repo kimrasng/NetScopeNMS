@@ -1,7 +1,8 @@
 "use client";
+import { formatDateTime } from "@/lib/date-format";
 
 import { useState, useCallback } from "react";
-import ContentLayout from "@cloudscape-design/components/content-layout";
+import Link from "@cloudscape-design/components/link";
 import Header from "@cloudscape-design/components/header";
 import Table from "@cloudscape-design/components/table";
 import Button from "@cloudscape-design/components/button";
@@ -14,6 +15,10 @@ import FormField from "@cloudscape-design/components/form-field";
 import Input from "@cloudscape-design/components/input";
 import Textarea from "@cloudscape-design/components/textarea";
 import { useCollection } from "@cloudscape-design/collection-hooks";
+import Select from "@cloudscape-design/components/select";
+import { useAuth } from "@/lib/auth";
+import { canOperate } from "@/lib/permissions";
+import type { Device } from "@/lib/types";
 import { useApi } from "@/hooks/use-api";
 import { useNotifications } from "@/hooks/use-notifications";
 import { useI18n } from "@/lib/i18n";
@@ -28,6 +33,11 @@ interface DiffResult {
 
 export default function ConfigSnapshotsPage() {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const { data: devices } = useApi<{ nodes: Device[] }>("/api/topology/graph");
+  const deviceOptions = devices?.nodes.map(device => ({ value: device.id, label: `${device.name} (${device.ip})` })) ?? [];
+  const [captureMode, setCaptureMode] = useState(false);
+  const [captureCommand, setCaptureCommand] = useState("show running-config");
   const { addNotification } = useNotifications();
   const [page, setPage] = useState(1);
   const { data, loading, refetch } = useApi<PaginatedResponse<ConfigSnapshot>>(
@@ -40,6 +50,7 @@ export default function ConfigSnapshotsPage() {
   const [selectedSnapshot, setSelectedSnapshot] = useState<ConfigSnapshot | null>(null);
   const [createDeviceId, setCreateDeviceId] = useState("");
   const [createConfigText, setCreateConfigText] = useState("");
+  const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<ConfigSnapshot[]>([]);
@@ -54,23 +65,23 @@ export default function ConfigSnapshotsPage() {
   });
 
   const handleCreate = useCallback(async () => {
+    setFormError("");
+    if (!createDeviceId) { setFormError(t("Select a device.")); return; }
+    if (captureMode ? !captureCommand.trim() : !createConfigText.trim()) { setFormError(t("Enter configuration text or a capture command.")); return; }
     setSaving(true);
     try {
-      await apiPost("/api/config-snapshots", {
-        deviceId: createDeviceId,
-        configText: createConfigText,
-      });
+      await apiPost(captureMode ? "/api/config-snapshots/capture" : "/api/config-snapshots", captureMode ? { deviceId: createDeviceId, command: captureCommand } : { deviceId: createDeviceId, configText: createConfigText });
       addNotification({ type: "success", content: t("configSnapshot.created") });
       setShowCreateModal(false);
       setCreateDeviceId("");
       setCreateConfigText("");
       refetch();
     } catch (err) {
-      addNotification({ type: "error", content: err instanceof Error ? err.message : "Failed to create snapshot." });
+      setFormError(err instanceof Error ? err.message : t("Failed to create snapshot."));
     } finally {
       setSaving(false);
     }
-  }, [createDeviceId, createConfigText, addNotification, refetch, t]);
+  }, [createDeviceId, createConfigText, captureMode, captureCommand, addNotification, refetch, t]);
 
   const handleDelete = useCallback(async (id: string) => {
     setDeleteLoading(id);
@@ -106,12 +117,12 @@ export default function ConfigSnapshotsPage() {
   }, [selectedItems, addNotification]);
 
   return (
-    <ContentLayout header={<Header variant="h1">{t("page.configSnapshots")}</Header>}>
+    <>
       <Table
         {...collectionProps}
         items={items}
         loading={loading}
-        loadingText="Loading config snapshots..."
+        loadingText={t("Loading config snapshots...")}
         variant="full-page"
         stickyHeader
         selectionType="multi"
@@ -123,8 +134,7 @@ export default function ConfigSnapshotsPage() {
         }}
         onRowClick={({ detail }) => handleRowClick(detail.item)}
         header={
-          <Header
-            variant="h2"
+          <Header variant="awsui-h1-sticky"
             counter={data ? `(${data.pagination.total})` : undefined}
             actions={
               <SpaceBetween direction="horizontal" size="xs">
@@ -135,7 +145,8 @@ export default function ConfigSnapshotsPage() {
                 >
                   {t("configSnapshot.compare")}
                 </Button>
-                <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+                <Button disabled={!canOperate(user)} onClick={() => { setCaptureMode(true); setFormError(""); setShowCreateModal(true); }}>{t("Capture via SSH")}</Button>
+                <Button disabled={!canOperate(user)} variant="primary" onClick={() => { setCaptureMode(false); setFormError(""); setShowCreateModal(true); }}>
                   {t("configSnapshot.createSnapshot")}
                 </Button>
               </SpaceBetween>
@@ -155,7 +166,7 @@ export default function ConfigSnapshotsPage() {
           {
             id: "deviceId",
             header: t("configSnapshot.device"),
-            cell: (item) => item.deviceId,
+            cell: (item) => <Link href={`/devices/${item.deviceId}`}>{devices?.nodes.find(device => device.id === item.deviceId)?.name ?? t("Device")}</Link>,
             sortingField: "deviceId",
             width: 280,
           },
@@ -167,14 +178,14 @@ export default function ConfigSnapshotsPage() {
           },
           {
             id: "diff",
-            header: "Diff Preview",
-            cell: (item) => item.diff ? item.diff.slice(0, 80) + (item.diff.length > 80 ? "…" : "") : "—",
+            header: t("Diff Preview"),
+            cell: (item) => item.diff === "Initial snapshot" ? t("Initial snapshot") : item.diff ? item.diff.slice(0, 80) + (item.diff.length > 80 ? "…" : "") : "—",
             width: 300,
           },
           {
             id: "capturedAt",
             header: t("configSnapshot.capturedAt"),
-            cell: (item) => new Date(item.capturedAt).toLocaleString(),
+            cell: (item) => formatDateTime(new Date(item.capturedAt)),
             sortingField: "capturedAt",
             width: 200,
           },
@@ -184,7 +195,7 @@ export default function ConfigSnapshotsPage() {
             cell: (item) => (
               <Button
                 variant="inline-link"
-                loading={deleteLoading === item.id}
+                disabled={!canOperate(user)} loading={deleteLoading === item.id}
                 onClick={() => handleDelete(item.id)}
               >
                 {t("common.delete")}
@@ -196,9 +207,10 @@ export default function ConfigSnapshotsPage() {
         empty={
           <Box textAlign="center" color="inherit" padding="l">
             <SpaceBetween size="m">
-              <Box variant="strong">No config snapshots</Box>
-              <Box variant="p" color="inherit">Create a snapshot to track device configuration changes.</Box>
-              <Button variant="primary" onClick={() => setShowCreateModal(true)}>{t("configSnapshot.createSnapshot")}</Button>
+              <Box variant="strong">{t("No config snapshots")}</Box>
+              <Box variant="p" color="inherit">{t("Create a snapshot to track device configuration changes.")}</Box>
+
+
             </SpaceBetween>
           </Box>
         }
@@ -217,23 +229,19 @@ export default function ConfigSnapshotsPage() {
           </Box>
         }
       >
-        <Form>
+        <Form errorText={formError}>
           <SpaceBetween size="m">
             <FormField label={t("configSnapshot.device")}>
-              <Input
-                value={createDeviceId}
-                onChange={({ detail }) => setCreateDeviceId(detail.value)}
-                placeholder="Enter device ID"
-              />
+              <Select filteringType="auto" options={deviceOptions} selectedOption={deviceOptions.find(option => option.value === createDeviceId) ?? null} onChange={({ detail }) => setCreateDeviceId(detail.selectedOption.value ?? "")} />
             </FormField>
-            <FormField label={t("configSnapshot.configText")}>
+            {captureMode ? <FormField label={t("Configuration command")}><Input value={captureCommand} onChange={({ detail }) => setCaptureCommand(detail.value)} /></FormField> : <FormField label={t("configSnapshot.configText")}>
               <Textarea
                 value={createConfigText}
                 onChange={({ detail }) => setCreateConfigText(detail.value)}
                 rows={12}
-                placeholder="Paste device configuration here"
+                placeholder={t("Paste device configuration here")}
               />
-            </FormField>
+            </FormField>}
           </SpaceBetween>
         </Form>
       </Modal>
@@ -241,39 +249,24 @@ export default function ConfigSnapshotsPage() {
       <Modal
         visible={showDetailModal}
         onDismiss={() => setShowDetailModal(false)}
-        header="Config Snapshot Detail"
+        header={t("Snapshot details")}
         size="large"
         footer={
           <Box float="right">
-            <Button variant="link" onClick={() => setShowDetailModal(false)}>Close</Button>
+            <Button variant="link" onClick={() => setShowDetailModal(false)}>{t("Close")}</Button>
           </Box>
         }
       >
         {selectedSnapshot && (
           <SpaceBetween size="m">
             <Box variant="awsui-key-label">{t("configSnapshot.device")}</Box>
-            <Box variant="p">{selectedSnapshot.deviceId}</Box>
+            <Link href={`/devices/${selectedSnapshot.deviceId}`}>{devices?.nodes.find(device => device.id === selectedSnapshot.deviceId)?.name ?? t("Device")}</Link>
             <Box variant="awsui-key-label">{t("configSnapshot.hash")}</Box>
             <Box variant="p">{selectedSnapshot.hash}</Box>
             <Box variant="awsui-key-label">{t("configSnapshot.capturedAt")}</Box>
-            <Box variant="p">{new Date(selectedSnapshot.capturedAt).toLocaleString()}</Box>
+            <Box variant="p">{formatDateTime(new Date(selectedSnapshot.capturedAt))}</Box>
             <Box variant="awsui-key-label">{t("configSnapshot.configText")}</Box>
-            <div
-              style={{
-                fontFamily: "monospace",
-                fontSize: 13,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-all",
-                background: "var(--color-background-container-content, #fafafa)",
-                border: "1px solid var(--color-border-divider-default, #e9ebed)",
-                borderRadius: 8,
-                padding: 16,
-                maxHeight: 500,
-                overflowY: "auto",
-              }}
-            >
-              {selectedSnapshot.configText}
-            </div>
+            <Textarea readOnly rows={14} value={selectedSnapshot.configText} />
           </SpaceBetween>
         )}
       </Modal>
@@ -285,7 +278,7 @@ export default function ConfigSnapshotsPage() {
         size="large"
         footer={
           <Box float="right">
-            <Button variant="link" onClick={() => setShowDiffModal(false)}>Close</Button>
+            <Button variant="link" onClick={() => setShowDiffModal(false)}>{t("Close")}</Button>
           </Box>
         }
       >
@@ -295,55 +288,22 @@ export default function ConfigSnapshotsPage() {
             {diffResult.added.length > 0 && (
               <div>
                 <Box variant="awsui-key-label">{t("configSnapshot.added")}</Box>
-                <div
-                  style={{
-                    fontFamily: "monospace",
-                    fontSize: 13,
-                    whiteSpace: "pre-wrap",
-                    background: "#e6ffec",
-                    border: "1px solid #abf2bc",
-                    borderRadius: 8,
-                    padding: 16,
-                    maxHeight: 250,
-                    overflowY: "auto",
-                  }}
-                >
-                  {diffResult.added.map((line, i) => (
-                    <div key={i}>+ {line}</div>
-                  ))}
-                </div>
+                <Textarea readOnly rows={6} value={diffResult.added.map(line => "+ " + line).join("\n")} />
               </div>
             )}
             {diffResult.removed.length > 0 && (
               <div>
                 <Box variant="awsui-key-label">{t("configSnapshot.removed")}</Box>
-                <div
-                  style={{
-                    fontFamily: "monospace",
-                    fontSize: 13,
-                    whiteSpace: "pre-wrap",
-                    background: "#ffebe9",
-                    border: "1px solid #ffcecb",
-                    borderRadius: 8,
-                    padding: 16,
-                    maxHeight: 250,
-                    overflowY: "auto",
-                  }}
-                >
-                  {diffResult.removed.map((line, i) => (
-                    <div key={i}>- {line}</div>
-                  ))}
-                </div>
+                <Textarea readOnly rows={6} value={diffResult.removed.map(line => "- " + line).join("\n")} />
               </div>
             )}
             {diffResult.added.length === 0 && diffResult.removed.length === 0 && (
               <Box textAlign="center" color="text-status-inactive">
-                No differences found between the two snapshots.
-              </Box>
+                {t("No differences found between the two snapshots.")}</Box>
             )}
           </SpaceBetween>
         )}
       </Modal>
-    </ContentLayout>
+    </>
   );
 }

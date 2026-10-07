@@ -1,7 +1,8 @@
-import type { FastifyInstance } from "fastify";
-import { eq, and, sql, desc, gte, lte } from "drizzle-orm";
-import { auditLogs } from "@netpulse/shared";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import { eq, and, sql, desc, gte, lte, getTableColumns } from "drizzle-orm";
+import { auditLogs, users } from "@netpulse/shared";
 import { requireRole } from "../middleware/auth.js";
+import { redactSecrets } from "../services/access.js";
 import type { Database } from "@netpulse/shared";
 
 export async function logAudit(
@@ -14,12 +15,23 @@ export async function logAudit(
     details?: unknown;
     ipAddress?: string;
   },
+  request?: FastifyRequest,
 ) {
-  const [row] = await db.insert(auditLogs).values(entry).returning();
+  const [row] = await db.insert(auditLogs).values({ ...entry, details: redactSecrets(entry.details) }).returning();
+  if (request) request.auditLogged = true;
   return row;
 }
 
 export async function auditLogRoutes(app: FastifyInstance) {
+  app.get("/options", { preHandler: [requireRole("super_admin", "admin")] }, async () => {
+    const [actions, resources, actors] = await Promise.all([
+      app.db.selectDistinct({ value: auditLogs.action }).from(auditLogs).orderBy(auditLogs.action),
+      app.db.selectDistinct({ value: auditLogs.resource }).from(auditLogs).orderBy(auditLogs.resource),
+      app.db.select({ id: users.id, name: users.name, email: users.email }).from(users).orderBy(users.name),
+    ]);
+    return { actions: actions.map(item => item.value), resources: resources.map(item => item.value), users: actors };
+  });
+
   app.get("/", { preHandler: [requireRole("super_admin", "admin")] }, async (request) => {
     const query = request.query as {
       userId?: string;
@@ -44,7 +56,7 @@ export async function auditLogRoutes(app: FastifyInstance) {
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [items, countResult] = await Promise.all([
-      app.db.select().from(auditLogs).where(where).limit(limit).offset(offset).orderBy(desc(auditLogs.createdAt)),
+      app.db.select({ ...getTableColumns(auditLogs), userName: users.name }).from(auditLogs).leftJoin(users, eq(auditLogs.userId, users.id)).where(where).limit(limit).offset(offset).orderBy(desc(auditLogs.createdAt)),
       app.db.select({ count: sql<number>`count(*)` }).from(auditLogs).where(where),
     ]);
 

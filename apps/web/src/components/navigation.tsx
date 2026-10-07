@@ -3,9 +3,13 @@
 import SideNavigation, { type SideNavigationProps } from "@cloudscape-design/components/side-navigation";
 import { usePathname, useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
+import { canVisit } from "@/lib/permissions";
 import { useSite } from "@/lib/site";
+import { consoleRoute } from "@/lib/console-routes";
 
 export function Navigation() {
+  const { user } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useI18n();
@@ -17,6 +21,7 @@ export function Navigation() {
       text: t("nav.monitoring"),
       items: [
         { type: "link", text: t("nav.dashboard"), href: "/dashboard" },
+        { type: "link", text: t("nav.dashboards"), href: "/dashboards" },
         { type: "link", text: t("nav.devices"), href: "/devices" },
         { type: "link", text: t("nav.incidents"), href: "/incidents" },
         { type: "link", text: t("nav.topology"), href: "/topology" },
@@ -28,6 +33,8 @@ export function Navigation() {
       items: [
         { type: "link", text: t("nav.metrics"), href: "/metrics" },
         { type: "link", text: t("nav.maps"), href: "/maps" },
+        { type: "link", text: t("Device groups"), href: "/device-groups" },
+        { type: "link", text: t("Network discovery"), href: "/discovery" },
       ],
     },
     {
@@ -57,7 +64,10 @@ export function Navigation() {
         { type: "link", text: t("nav.siteSettings"), href: "/settings/site" },
         { type: "link", text: t("nav.apiKeys"), href: "/settings/api-keys" },
         { type: "link", text: t("nav.auditLogs"), href: "/settings/audit-logs" },
-        { type: "link", text: t("nav.dashboards"), href: "/dashboards" },
+      ],
+    },
+    {
+      type: "section", text: t("Account"), items: [
         { type: "link", text: t("nav.profile"), href: "/settings/profile" },
         { type: "link", text: t("nav.preferences"), href: "/settings/preferences" },
       ],
@@ -67,8 +77,8 @@ export function Navigation() {
   return (
     <SideNavigation
       header={{ href: "/dashboard", text: siteName }}
-      activeHref={pathname}
-      items={navItems}
+      activeHref={consoleRoute(pathname, siteName, t).activeHref}
+      items={navItems.map(item => item.type === "section" ? { ...item, items: item.items.filter(child => child.type !== "link" || canVisit(child.href, user)) } : item).filter(item => item.type !== "section" || item.items.length > 0)}
       onFollow={(event) => {
         event.preventDefault();
         router.push(event.detail.href);

@@ -1,5 +1,6 @@
 import type { Database } from "@netpulse/shared";
 import type { Server as SocketIOServer } from "socket.io";
+import type { startPollingEngine, DiscoveryEngine } from "@netpulse/polling-engine";
 import type { Sql } from "postgres";
 
 declare module "fastify" {
@@ -7,6 +8,8 @@ declare module "fastify" {
     db: Database;
     dbClient: Sql;
     io: SocketIOServer;
+    pollingEngine?: ReturnType<typeof startPollingEngine>;
+    discoveryEngine?: ReturnType<DiscoveryEngine["start"]>;
   }
   interface FastifyRequest {
     userId?: string;
@@ -14,5 +17,7 @@ declare module "fastify" {
     userScope?: string;
     userAllowedDeviceIds?: string[];
     userAllowedGroupIds?: string[];
+    userDeviceIds?: string[] | null;
+    auditLogged?: boolean;
   }
 }

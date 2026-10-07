@@ -25,3 +25,5 @@ engine.schedulePolling().then(() => {
   console.error("Failed to schedule polling:", err);
   process.exit(1);
 });
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => { void engine.shutdown().then(() => process.exit(0)); });

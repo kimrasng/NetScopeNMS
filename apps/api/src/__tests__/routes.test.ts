@@ -76,9 +76,7 @@ describe("Audit Logs", () => {
       const { auditLogRoutes } = await import("../routes/audit-logs.js");
       await auditLogRoutes(app);
 
-      expect(app.get).toHaveBeenCalledTimes(2);
-      expect(app.get.mock.calls[0][0]).toBe("/");
-      expect(app.get.mock.calls[1][0]).toBe("/:id");
+      expect(app.get.mock.calls.map(call => call[0])).toEqual(["/options", "/", "/:id"]);
     });
   });
 });
@@ -208,7 +206,7 @@ describe("Config Snapshots", () => {
     await configSnapshotRoutes(app);
 
     expect(app.get).toHaveBeenCalledTimes(3);
-    expect(app.post).toHaveBeenCalledTimes(1);
+    expect(app.post).toHaveBeenCalledTimes(2);
     expect(app.delete).toHaveBeenCalledTimes(1);
     expect(app.get.mock.calls[0][0]).toBe("/");
     expect(app.get.mock.calls[1][0]).toBe("/:id");

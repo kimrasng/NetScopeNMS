@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { authenticate } from "../middleware/auth.js";
 
@@ -19,7 +20,7 @@ export async function metricsRoutes(app: FastifyInstance) {
     const to = query.to ? new Date(query.to) : new Date();
     const bucket = query.bucket || "1 minute";
 
-    if (!ALLOWED_BUCKETS.includes(bucket as any)) {
+    if (!ALLOWED_BUCKETS.some(value => value === bucket)) {
       return reply.code(400).send({ error: `Invalid bucket. Allowed values: ${ALLOWED_BUCKETS.join(", ")}` });
     }
 
@@ -47,7 +48,7 @@ export async function metricsRoutes(app: FastifyInstance) {
     if (!query.deviceId || !query.metric) {
       return reply.code(400).send({ error: "deviceId and metric are required" });
     }
-    const hours = parseInt(query.hours || "24", 10);
+    const hours = z.coerce.number().int().min(1).max(8760).parse(query.hours ?? 24);
 
     const result = await app.db.execute(sql`
       WITH stats AS (
@@ -101,16 +102,16 @@ export async function metricsRoutes(app: FastifyInstance) {
       )
       SELECT slope, intercept, current_avg,
         CASE
-          WHEN slope > 0 AND ${query.threshold || "100"}::float > current_avg THEN
-            ((${query.threshold || "100"}::float - intercept) / NULLIF(slope, 0)) - EXTRACT(EPOCH FROM NOW())
+          WHEN slope > 0 AND ${z.coerce.number().finite().parse(query.threshold ?? 100)}::float > current_avg THEN
+            ((${z.coerce.number().finite().parse(query.threshold ?? 100)}::float - intercept) / NULLIF(slope, 0)) - EXTRACT(EPOCH FROM NOW())
           ELSE NULL
         END AS seconds_until_threshold
       FROM regression
     `);
 
-    const row = (result as any[])[0];
-    if (row?.seconds_until_threshold && row.seconds_until_threshold > 0) {
-      const days = Math.round(row.seconds_until_threshold / 86400 * 10) / 10;
+    const row = result[0];
+    if (row?.seconds_until_threshold && Number(row.seconds_until_threshold) > 0) {
+      const days = Math.round(Number(row.seconds_until_threshold) / 86400 * 10) / 10;
       return { prediction: { daysUntilThreshold: days, slope: row.slope, currentAvg: row.current_avg } };
     }
     return { prediction: null, message: "No threshold breach predicted" };

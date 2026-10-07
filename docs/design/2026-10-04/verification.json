@@ -1,0 +1,504 @@
+{
+  "date": "2026-10-04",
+  "environment": "Isolated localhost fixtures and mock services",
+  "unit": {
+    "passed": 185,
+    "failed": 0,
+    "files": 16
+  },
+  "integration": {
+    "passed": 95,
+    "failed": 0,
+    "checks": [
+      {
+        "name": "Health endpoint",
+        "passed": true
+      },
+      {
+        "name": "Unauthenticated devices denied",
+        "passed": true
+      },
+      {
+        "name": "Fresh database needs setup",
+        "passed": true
+      },
+      {
+        "name": "Initial setup creates super admin",
+        "passed": true
+      },
+      {
+        "name": "Repeated setup blocked",
+        "passed": true
+      },
+      {
+        "name": "Invalid login rejected",
+        "passed": true
+      },
+      {
+        "name": "Valid login works",
+        "passed": true
+      },
+      {
+        "name": "Empty device body returns client validation error",
+        "passed": true
+      },
+      {
+        "name": "Create and read device",
+        "passed": true
+      },
+      {
+        "name": "Invalid IP and coordinates rejected",
+        "passed": true
+      },
+      {
+        "name": "Restricted list excludes hidden device",
+        "passed": true
+      },
+      {
+        "name": "Restricted detail denies hidden device",
+        "passed": true
+      },
+      {
+        "name": "Restricted metrics deny hidden device",
+        "passed": true
+      },
+      {
+        "name": "Restricted dashboard excludes hidden resources",
+        "passed": true
+      },
+      {
+        "name": "Restricted incident detail denied",
+        "passed": true
+      },
+      {
+        "name": "Group scope includes incident of group device",
+        "passed": true
+      },
+      {
+        "name": "Viewer device write blocked",
+        "passed": true
+      },
+      {
+        "name": "Restricted operator cannot edit hidden device",
+        "passed": true
+      },
+      {
+        "name": "SNMP secrets hidden from viewer response",
+        "passed": true
+      },
+      {
+        "name": "Authorized admin responses also omit SNMP secrets",
+        "passed": true
+      },
+      {
+        "name": "Invitation links target the implemented web route",
+        "passed": true
+      },
+      {
+        "name": "Email-bound invite rejects another email",
+        "passed": true
+      },
+      {
+        "name": "Rejected email does not consume the invitation",
+        "passed": true
+      },
+      {
+        "name": "An invitation cannot be accepted twice",
+        "passed": true
+      },
+      {
+        "name": "Restricted snapshot detail denied",
+        "passed": true
+      },
+      {
+        "name": "Snapshot diff API works",
+        "passed": true
+      },
+      {
+        "name": "Restricted viewer cannot acknowledge hidden incident",
+        "passed": true
+      },
+      {
+        "name": "WebSocket keeps hidden incident private",
+        "passed": true
+      },
+      {
+        "name": "Incident comment works",
+        "passed": true
+      },
+      {
+        "name": "Incident AI button invokes real analysis",
+        "passed": true
+      },
+      {
+        "name": "AI without provider reports unavailable",
+        "passed": true
+      },
+      {
+        "name": "Custom AI provider connection works",
+        "passed": true
+      },
+      {
+        "name": "AI SQL query executes",
+        "passed": true
+      },
+      {
+        "name": "Restricted AI query excludes hidden devices",
+        "passed": true
+      },
+      {
+        "name": "AI chat responds",
+        "passed": true
+      },
+      {
+        "name": "Real RCA route uses provider",
+        "passed": true
+      },
+      {
+        "name": "Profile phone persists",
+        "passed": true
+      },
+      {
+        "name": "Profile phone roundtrip",
+        "passed": true
+      },
+      {
+        "name": "API key create works",
+        "passed": true
+      },
+      {
+        "name": "Generated API key authenticates API",
+        "passed": true
+      },
+      {
+        "name": "API key expiry validates date",
+        "passed": true
+      },
+      {
+        "name": "Availability report uses ping history",
+        "passed": true
+      },
+      {
+        "name": "Report deviceIds scope applied",
+        "passed": true
+      },
+      {
+        "name": "Performance report generates",
+        "passed": true
+      },
+      {
+        "name": "Alert summary generates",
+        "passed": true
+      },
+      {
+        "name": "AI narrative uses configured provider or errors",
+        "passed": true
+      },
+      {
+        "name": "Reports list follows web contract",
+        "passed": true
+      },
+      {
+        "name": "Invalid notification transport rejected before saving",
+        "passed": true
+      },
+      {
+        "name": "Webhook success test reaches local receiver",
+        "passed": true
+      },
+      {
+        "name": "Webhook non-2xx test reports failure",
+        "passed": true
+      },
+      {
+        "name": "Channel tests logged in history",
+        "passed": true
+      },
+      {
+        "name": "Notification history follows web contract",
+        "passed": true
+      },
+      {
+        "name": "Maintenance create works",
+        "passed": true
+      },
+      {
+        "name": "Maintenance rejects reversed time range",
+        "passed": true
+      },
+      {
+        "name": "Maintenance validates cron expression",
+        "passed": true
+      },
+      {
+        "name": "Active maintenance returns scoped window",
+        "passed": true
+      },
+      {
+        "name": "Alert rule creation works",
+        "passed": true
+      },
+      {
+        "name": "Dashboard widgets saved",
+        "passed": true
+      },
+      {
+        "name": "Bodyless dashboard duplicate works",
+        "passed": true
+      },
+      {
+        "name": "Dashboard edits persist configured widgets",
+        "passed": true
+      },
+      {
+        "name": "Default dashboard is a working route",
+        "passed": true
+      },
+      {
+        "name": "Unsupported dashboard widget rejected",
+        "passed": true
+      },
+      {
+        "name": "Topology position API works",
+        "passed": true
+      },
+      {
+        "name": "Metrics query works",
+        "passed": true
+      },
+      {
+        "name": "Anomaly API detects fixture outlier",
+        "passed": true
+      },
+      {
+        "name": "Prediction API follows renderer contract",
+        "passed": true
+      },
+      {
+        "name": "Invalid metric date returns client error",
+        "passed": true
+      },
+      {
+        "name": "Pagination rejects negative page",
+        "passed": true
+      },
+      {
+        "name": "User deletion preserves audit references",
+        "passed": true
+      },
+      {
+        "name": "Deleted user token denied",
+        "passed": true
+      },
+      {
+        "name": "Disabled user cannot login",
+        "passed": true
+      },
+      {
+        "name": "Role downgrade enforced for existing token",
+        "passed": true
+      },
+      {
+        "name": "New enabled device scheduled without server restart",
+        "passed": true
+      },
+      {
+        "name": "Default startup runs threshold consumer",
+        "passed": true
+      },
+      {
+        "name": "Audit logs include API key mutations",
+        "passed": true
+      },
+      {
+        "name": "Audit logs include dashboard mutations",
+        "passed": true
+      },
+      {
+        "name": "Audit logs include AI provider mutations",
+        "passed": true
+      },
+      {
+        "name": "Audit details redact SNMP and AI credentials",
+        "passed": true
+      },
+      {
+        "name": "Account scope changes revoke existing JWT",
+        "passed": true
+      },
+      {
+        "name": "Old session rejected after account update",
+        "passed": true
+      },
+      {
+        "name": "API keys use the current account scope",
+        "passed": true
+      },
+      {
+        "name": "Disabled account API key rejected",
+        "passed": true
+      },
+      {
+        "name": "Disabled account socket disconnected",
+        "passed": true
+      },
+      {
+        "name": "Downgraded role enforced on existing API key",
+        "passed": true
+      },
+      {
+        "name": "Password update revokes prior sessions",
+        "passed": true
+      },
+      {
+        "name": "Previous JWT rejected after password update",
+        "passed": true
+      },
+      {
+        "name": "Updated password permits login",
+        "passed": true
+      },
+      {
+        "name": "Bodyless API key deletion works",
+        "passed": true
+      },
+      {
+        "name": "Deleted API key cannot authenticate",
+        "passed": true
+      },
+      {
+        "name": "Expired API key rejected",
+        "passed": true
+      },
+      {
+        "name": "API key lists never include the raw key or hash",
+        "passed": true
+      },
+      {
+        "name": "Invalid input is a client error: /api/devices/not-a-uuid",
+        "passed": true
+      },
+      {
+        "name": "Invalid input is a client error: /api/metrics?deviceId=5ea0a10f-c364-4dce-b23f-fb3d1e97c323&bucket=not-a-bucket",
+        "passed": true
+      },
+      {
+        "name": "Invalid input is a client error: /api/metrics?deviceId=5ea0a10f-c364-4dce-b23f-fb3d1e97c323&from=2026-10-03T15%3A47%3A11.021Z&to=2020-01-01T00:00:00Z",
+        "passed": true
+      },
+      {
+        "name": "Invalid input is a client error: /api/incidents?limit=0",
+        "passed": true
+      }
+    ]
+  },
+  "design": {
+    "passed": 25,
+    "failed": 0,
+    "checks": [
+      {
+        "name": "Active incident filter includes problems and acknowledged incidents",
+        "passed": true
+      },
+      {
+        "name": "Incident detail includes a readable acknowledgement actor",
+        "passed": true
+      },
+      {
+        "name": "Incident event actor names are attached to detail results",
+        "passed": true
+      },
+      {
+        "name": "Report list includes generated-by names",
+        "passed": true
+      },
+      {
+        "name": "Audit entries include readable user names",
+        "passed": true
+      },
+      {
+        "name": "Audit filter options contain actual action and resource values",
+        "passed": true
+      },
+      {
+        "name": "Selected audit action and resource filters return matching entries",
+        "passed": true
+      },
+      {
+        "name": "Audit date range filters exclude observations outside the range",
+        "passed": true
+      },
+      {
+        "name": "Audit filter metadata remains restricted to administrators",
+        "passed": true
+      },
+      {
+        "name": "Report name enrichment preserves resource scope",
+        "passed": true
+      },
+      {
+        "name": "Dashboard accepts responsive Board layout metadata",
+        "passed": true
+      },
+      {
+        "name": "Dashboard respects persisted widget ordering",
+        "passed": true
+      },
+      {
+        "name": "Dashboard retains dimensions and breakpoint offsets",
+        "passed": true
+      },
+      {
+        "name": "Dashboard accepts resized layout updates",
+        "passed": true
+      },
+      {
+        "name": "Resized layout persists after a fresh request",
+        "passed": true
+      },
+      {
+        "name": "Shared dashboard viewer cannot save owner changes",
+        "passed": true
+      },
+      {
+        "name": "Out-of-range Board dimensions are rejected",
+        "passed": true
+      },
+      {
+        "name": "Layout changes preserve metric device access checks",
+        "passed": true
+      },
+      {
+        "name": "Typed availability report retains observed data",
+        "passed": true
+      },
+      {
+        "name": "Typed performance report retains observed data",
+        "passed": true
+      },
+      {
+        "name": "Typed alert_summary report retains observed data",
+        "passed": true
+      },
+      {
+        "name": "AI query still returns typed result rows",
+        "passed": true
+      },
+      {
+        "name": "Incident assistance still responds through the mock provider",
+        "passed": true
+      },
+      {
+        "name": "Discovery history remains a structured job collection",
+        "passed": true
+      },
+      {
+        "name": "Configured mock notification can be tested",
+        "passed": true
+      }
+    ]
+  },
+  "lint": "passed",
+  "productionBuild": "passed",
+  "diffCheck": "passed"
+}

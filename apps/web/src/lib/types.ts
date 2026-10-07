@@ -7,6 +7,8 @@ export interface User {
   name: string;
   role: "super_admin" | "admin" | "operator" | "viewer";
   scope: string;
+  allowedDeviceIds?: string[];
+  allowedGroupIds?: string[];
   phone?: string | null;
   avatarUrl?: string | null;
   onCall: boolean;
@@ -45,6 +47,12 @@ export interface Device {
   status: DeviceStatus;
   snmpVersion?: string | null;
   snmpCommunity?: string | null;
+  snmpCommunityConfigured?: boolean;
+  snmpV3Config?: { username: string; securityLevel: string; authProtocol?: string; privProtocol?: string; authKeyConfigured?: boolean; privKeyConfigured?: boolean } | null;
+  sshHost?: string | null;
+  sshPort?: number | null;
+  sshUsername?: string | null;
+  sshHostFingerprint?: string | null;
   snmpPort?: number | null;
   location?: string | null;
   latitude?: number | null;
@@ -92,6 +100,7 @@ export type Severity = "critical" | "high" | "medium" | "low";
 export type IncidentStatus = "problem" | "acknowledged" | "resolved";
 
 export interface Incident {
+  acknowledgedByName?: string | null;
   id: string;
   deviceId: string;
   ruleId?: string | null;
@@ -114,6 +123,7 @@ export interface Incident {
 }
 
 export interface IncidentEvent {
+  createdByName?: string | null;
   id: string;
   incidentId: string;
   type: string;
@@ -225,6 +235,7 @@ export interface NotificationRecord {
 export type ReportType = "availability" | "performance" | "alert_summary" | "ai_narrative";
 
 export interface Report {
+  generatedByName?: string | null;
   id: string;
   type: ReportType;
   title: string;
@@ -251,6 +262,7 @@ export interface AIProvider {
 
 // ─── Maintenance Windows ──────────────────────────────
 export interface MaintenanceWindow {
+  isActive?: boolean;
   id: string;
   name: string;
   description?: string | null;
@@ -260,6 +272,7 @@ export interface MaintenanceWindow {
   endAt: string;
   recurring: boolean;
   cronExpression?: string | null;
+  timezone: string;
   createdBy?: string | null;
   createdAt: string;
 }
@@ -276,6 +289,7 @@ export interface ConfigSnapshot {
 
 // ─── Audit Logs ───────────────────────────────────────
 export interface AuditLog {
+  userName?: string | null;
   id: string;
   userId?: string | null;
   action: string;

@@ -11,13 +11,14 @@ import Select from "@cloudscape-design/components/select";
 import Toggle from "@cloudscape-design/components/toggle";
 import Button from "@cloudscape-design/components/button";
 import SpaceBetween from "@cloudscape-design/components/space-between";
+import ExpandableSection from "@cloudscape-design/components/expandable-section";
 import Container from "@cloudscape-design/components/container";
-import Alert from "@cloudscape-design/components/alert";
 import TokenGroup from "@cloudscape-design/components/token-group";
 import type { SelectProps } from "@cloudscape-design/components/select";
 import { apiPost } from "@/lib/api";
 import { useNotifications } from "@/hooks/use-notifications";
 import { useI18n } from "@/lib/i18n";
+import { DeviceConnectionFields, connectionState, connectionPayload } from "@/components/common/device-connection-fields";
 import type { Device } from "@/lib/types";
 
 const DEVICE_TYPE_OPTIONS: SelectProps.Option[] = [
@@ -74,7 +75,9 @@ export default function CreateDevicePage() {
   const router = useRouter();
   const { addNotification } = useNotifications();
   const [form, setForm] = useState<FormState>(INITIAL_STATE);
+  const [connection, setConnection] = useState(connectionState());
   const [submitting, setSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -96,6 +99,12 @@ export default function CreateDevicePage() {
 
   async function handleSubmit() {
     setError("");
+    const errors: Record<string, string> = {};
+    if (!form.name.trim()) errors.name = t("Name is required.");
+    if (!form.ip.trim()) errors.ip = t("Enter an IP address.");
+    if (!form.type) errors.type = t("Select a device type.");
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) return;
     setSubmitting(true);
     try {
       const body = {
@@ -111,6 +120,7 @@ export default function CreateDevicePage() {
         latitude: form.latitude ? Number(form.latitude) : undefined,
         longitude: form.longitude ? Number(form.longitude) : undefined,
         tags: form.tags,
+        ...connectionPayload(connection, form.snmpVersion?.value),
       };
       await apiPost<Device>("/api/devices", body);
       addNotification({ type: "success", content: "Device created successfully." });
@@ -143,33 +153,28 @@ export default function CreateDevicePage() {
           errorText={error}
         >
           <SpaceBetween size="l">
-            {error && (
-              <Alert type="error" dismissible onDismiss={() => setError("")}>
-                {error}
-              </Alert>
-            )}
 
             <Container header={<Header variant="h2">{t("device.basicInfo")}</Header>}>
               <SpaceBetween size="l">
-                <FormField label={t("common.name")} constraintText="Required">
+                <FormField label={t("common.name")} errorText={fieldErrors.name} constraintText={t("Required")}>
                   <Input
                     value={form.name}
                     onChange={({ detail }) => update("name", detail.value)}
-                    placeholder="core-router-01"
+                    placeholder={t("core-router-01")}
                   />
                 </FormField>
-                <FormField label={t("device.ip")} constraintText="Required">
+                <FormField label={t("device.ip")} errorText={fieldErrors.ip} constraintText={t("Required")}>
                   <Input
                     value={form.ip}
                     onChange={({ detail }) => update("ip", detail.value)}
                     placeholder="192.168.1.1"
                   />
                 </FormField>
-                <FormField label={t("common.type")} constraintText="Required">
+                <FormField label={t("common.type")} errorText={fieldErrors.type} constraintText={t("Required")}>
                   <Select
-                    selectedOption={form.type}
+                    selectedOption={form.type ? { ...form.type, label: t(`deviceType.${form.type.value}`) } : null}
                     onChange={({ detail }) => update("type", detail.selectedOption)}
-                    options={DEVICE_TYPE_OPTIONS}
+                    options={DEVICE_TYPE_OPTIONS.map(option => ({ ...option, label: t(`deviceType.${option.value}`) }))}
                     placeholder={t("device.selectType")}
                   />
                 </FormField>
@@ -177,7 +182,7 @@ export default function CreateDevicePage() {
                   <Input
                     value={form.location}
                     onChange={({ detail }) => update("location", detail.value)}
-                    placeholder="Data Center A, Rack 12"
+                    placeholder={t("Data Center A, Rack 12")}
                   />
                 </FormField>
               </SpaceBetween>
@@ -197,7 +202,7 @@ export default function CreateDevicePage() {
                   <Input
                     value={form.snmpCommunity}
                     onChange={({ detail }) => update("snmpCommunity", detail.value)}
-                    placeholder="public"
+                    placeholder={t("public")}
                   />
                 </FormField>
                 <FormField label={t("device.snmpPort")}>
@@ -211,11 +216,15 @@ export default function CreateDevicePage() {
               </SpaceBetween>
             </Container>
 
+            <Container header={<Header variant="h2">{t("Connection settings")}</Header>}>
+              <DeviceConnectionFields value={connection} onChange={setConnection} version={form.snmpVersion?.value} editing={false} />
+            </Container>
+
             <Container header={<Header variant="h2">{t("device.pollingInterval")}</Header>}>
               <SpaceBetween size="l">
                 <FormField
                   label={t("device.pollingInterval")}
-                  constraintText="Minimum 30 seconds"
+                  constraintText={t("Minimum 30 seconds")}
                 >
                   <Input
                     value={form.pollingInterval}
@@ -235,9 +244,9 @@ export default function CreateDevicePage() {
               </SpaceBetween>
             </Container>
 
-            <Container header={<Header variant="h2">{t("device.coordinates")}</Header>}>
+            <ExpandableSection variant="container" headerText={t("device.coordinates")} >
               <SpaceBetween size="l">
-                <FormField label={t("device.latitude")} description="Optional">
+                <FormField label={t("device.latitude")} description={t("Optional")}>
                   <Input
                     value={form.latitude}
                     onChange={({ detail }) => update("latitude", detail.value)}
@@ -245,7 +254,7 @@ export default function CreateDevicePage() {
                     placeholder="37.5665"
                   />
                 </FormField>
-                <FormField label={t("device.longitude")} description="Optional">
+                <FormField label={t("device.longitude")} description={t("Optional")}>
                   <Input
                     value={form.longitude}
                     onChange={({ detail }) => update("longitude", detail.value)}
@@ -254,17 +263,17 @@ export default function CreateDevicePage() {
                   />
                 </FormField>
               </SpaceBetween>
-            </Container>
+            </ExpandableSection>
 
-            <Container header={<Header variant="h2">{t("device.tags")}</Header>}>
+            <ExpandableSection variant="container" headerText={t("device.tags")} >
               <SpaceBetween size="l">
-                <FormField label={t("device.addTag")} description="Press Enter to add a tag">
+                <FormField label={t("device.addTag")} description={t("Press Enter to add a tag")}>
                   <SpaceBetween direction="horizontal" size="xs">
                     <Input
                       value={form.tagInput}
                       onChange={({ detail }) => update("tagInput", detail.value)}
                       onKeyDown={({ detail }) => handleTagKeyDown(detail.key)}
-                      placeholder="production"
+                      placeholder={t("production")}
                     />
                     <Button onClick={handleAddTag} iconName="add-plus">
                       {t("device.addTag")}
@@ -283,7 +292,7 @@ export default function CreateDevicePage() {
                   />
                 )}
               </SpaceBetween>
-            </Container>
+            </ExpandableSection>
           </SpaceBetween>
         </Form>
       </form>

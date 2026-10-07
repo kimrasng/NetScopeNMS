@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { ko } from "./translations/ko";
 import { en } from "./translations/en";
+import { consoleKo, consoleEn } from "./console-messages";
 
 export type Locale = "ko" | "en";
 
@@ -40,7 +41,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, [locale]);
 
   const t = useCallback((key: string): string => {
-    return translations[locale][key] ?? key;
+    return translations[locale][key] ?? (locale === "ko" ? consoleKo[key] : consoleEn[key]) ?? (key.startsWith("metric.") ? key.slice(7) : key);
   }, [locale]);
 
   return (

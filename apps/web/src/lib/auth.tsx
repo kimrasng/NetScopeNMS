@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
-import { apiGet, apiPost, setToken, clearToken } from "./api";
+import { apiGet, apiPost, setToken, clearToken, ApiError } from "./api";
 import type { User, LoginResponse } from "./types";
 
 // ─── Auth Context ─────────────────────────────────────
@@ -24,9 +24,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const userData = await apiGet<User>("/api/auth/me");
       setUser(userData);
-    } catch {
-      setUser(null);
-      clearToken();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) { setUser(null); clearToken(); }
     }
   }, []);
 
@@ -38,6 +37,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, [refreshUser]);
+
+  const userId = user?.id;
+  useEffect(() => {
+    if (!userId) return;
+    const update = () => { void refreshUser(); };
+    const timer = window.setInterval(update, 30000);
+    window.addEventListener("focus", update);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", update); };
+  }, [userId, refreshUser]);
 
   const login = useCallback(async (email: string, password: string) => {
     const result = await apiPost<LoginResponse>("/api/auth/login", { email, password });

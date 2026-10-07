@@ -1,56 +1,22 @@
+import { bodySchema } from "../services/contracts.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { incidents, aiProviders } from "@netpulse/shared";
-import { AIEngine, type AIProviderConfig } from "@netpulse/ai-engine";
+import { AIEngine } from "@netpulse/ai-engine";
+import { HttpError } from "../services/access.js";
+import { getDefaultEngine, executeReadQuery, generateIncidentRca } from "../services/ai.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 
 const querySchema = z.object({ query: z.string().min(1).max(1000) });
 const chatSchema = z.object({ message: z.string().min(1).max(2000), incidentId: z.string().uuid() });
-
-const SQL_DANGEROUS_PATTERN = /;|--|\/\*|\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE)\b/i;
-
-/** Validate AI-generated SQL is a safe read-only SELECT */
-function sanitizeSQL(rawSql: string): string {
-  const trimmed = rawSql.trim();
-  if (!trimmed.toUpperCase().startsWith("SELECT")) {
-    throw new Error("Only SELECT statements are allowed");
-  }
-  if (SQL_DANGEROUS_PATTERN.test(trimmed)) {
-    throw new Error("SQL contains disallowed keywords or characters");
-  }
-  return trimmed;
-}
-
-/** Get the default AI engine from DB, or null if none configured */
-async function getDefaultEngine(app: FastifyInstance): Promise<AIEngine | null> {
-  // Try default provider first, then any enabled provider
-  let provider = await app.db.query.aiProviders.findFirst({
-    where: eq(aiProviders.isDefault, true),
-  });
-  if (!provider || !provider.enabled) {
-    provider = await app.db.query.aiProviders.findFirst({
-      where: eq(aiProviders.enabled, true),
-    });
-  }
-  if (!provider) return null;
-
-  const config: AIProviderConfig = {
-    type: provider.type as any,
-    apiKey: provider.apiKey,
-    model: provider.model || undefined,
-    baseUrl: provider.baseUrl || undefined,
-    enabled: provider.enabled,
-  };
-  return new AIEngine(config);
-}
 
 /**
  * AI routes: query, chat, RCA - now using multi-provider ai-engine
  */
 export async function aiRoutes(app: FastifyInstance) {
   // Natural language query
-  app.post("/query", { preHandler: [authenticate] }, async (request, reply) => {
+  app.post("/query", { schema: bodySchema(querySchema), preHandler: [authenticate] }, async (request, reply) => {
     const { query } = querySchema.parse(request.body);
     const engine = await getDefaultEngine(app);
     if (!engine) return reply.code(503).send({ error: "No AI provider configured. Add one in Settings > AI." });
@@ -60,31 +26,26 @@ export async function aiRoutes(app: FastifyInstance) {
       const result = await engine.naturalLanguageQuery(query, dbSchema);
 
       if (result.type === "sql" && result.sql) {
-        let validatedSql: string;
-        try {
-          validatedSql = sanitizeSQL(result.sql);
-        } catch {
-          return { type: "answer", answer: "Only safe read queries are allowed.", explanation: result.explanation };
-        }
-        const data = await app.db.execute(sql.raw(validatedSql));
-        return { type: "data", data, explanation: result.explanation, sql: validatedSql };
+        const data = await executeReadQuery(request, result.sql);
+        return { type: "data", data, columns: data.length ? Object.keys(data[0]) : [], explanation: result.explanation, sql: result.sql };
       }
       return result;
-    } catch (err: any) {
+    } catch (err) {
+      if (err instanceof HttpError) throw err;
       app.log.error(err, "AI query failed");
-      return reply.code(500).send({ error: `AI query failed: ${err.message}` });
+      return reply.code(500).send({ error: `AI query failed: ${err instanceof Error ? err.message : "Unknown error"}` });
     }
   });
 
   // Incident AI chat
-  app.post("/chat", { preHandler: [authenticate] }, async (request, reply) => {
+  app.post("/chat", { schema: bodySchema(chatSchema), preHandler: [authenticate] }, async (request, reply) => {
     const { message, incidentId } = chatSchema.parse(request.body);
     const engine = await getDefaultEngine(app);
     if (!engine) return reply.code(503).send({ error: "No AI provider configured" });
 
     const incident = await app.db.query.incidents.findFirst({
       where: eq(incidents.id, incidentId),
-      with: { device: true, events: { orderBy: (e: any, { desc }: any) => [desc(e.createdAt)], limit: 20 } },
+      with: { device: true, events: { orderBy: (e, { desc }) => [desc(e.createdAt)], limit: 20 } },
     });
     if (!incident) return reply.code(404).send({ error: "Incident not found" });
 
@@ -100,81 +61,23 @@ export async function aiRoutes(app: FastifyInstance) {
           role: "system",
           content: `You are a network incident analysis assistant.
 Incident: ${JSON.stringify({ title: incident.title, severity: incident.severity, status: incident.status, metric: incident.metricName, value: incident.metricValue })}
-Device: ${JSON.stringify({ name: (incident as any).device?.name, ip: (incident as any).device?.ip, type: (incident as any).device?.type })}
+Device: ${JSON.stringify({ name: incident.device?.name, ip: incident.device?.ip, type: incident.device?.type })}
 Recent metrics: ${JSON.stringify(recentMetrics)}
-Events: ${JSON.stringify((incident as any).events?.map((e: any) => ({ type: e.type, message: e.message, at: e.createdAt })))}
+Events: ${JSON.stringify(incident.events?.map((e) => ({ type: e.type, message: e.message, at: e.createdAt })))}
 Provide concise, actionable answers.`,
         },
         { role: "user", content: message },
       ]);
       return { response };
-    } catch (err: any) {
+    } catch (err) {
       app.log.error(err, "AI chat failed");
-      return reply.code(500).send({ error: `AI chat failed: ${err.message}` });
+      return reply.code(500).send({ error: `AI chat failed: ${err instanceof Error ? err.message : "Unknown error"}` });
     }
   });
 
-  // Generate RCA
-  app.post("/rca/:incidentId", { preHandler: [authenticate] }, async (request, reply) => {
+  app.post("/rca/:incidentId", { preHandler: [requireRole("super_admin", "admin", "operator")] }, async (request) => {
     const { incidentId } = request.params as { incidentId: string };
-    const engine = await getDefaultEngine(app);
-    if (!engine) return reply.code(503).send({ error: "No AI provider configured" });
-
-    const incident = await app.db.query.incidents.findFirst({
-      where: eq(incidents.id, incidentId),
-      with: { device: true },
-    });
-    if (!incident) return reply.code(404).send({ error: "Incident not found" });
-
-    const recentMetrics = await app.db.execute(sql`
-      SELECT metric_name, AVG(value) as avg_val, MAX(value) as max_val, MIN(value) as min_val,
-             time_bucket('5 minutes', timestamp) AS bucket
-      FROM metrics WHERE device_id = ${incident.deviceId} AND timestamp >= NOW() - INTERVAL '60 minutes'
-      GROUP BY metric_name, bucket ORDER BY bucket DESC
-    `);
-
-    const similarIncidents = await app.db.select().from(incidents)
-      .where(eq(incidents.deviceId, incident.deviceId))
-      .orderBy(desc(incidents.startedAt)).limit(5);
-
-    try {
-      const rca = await engine.generateRCA({
-        incident: {
-          title: incident.title,
-          severity: incident.severity,
-          metricName: incident.metricName || undefined,
-          metricValue: incident.metricValue ? Number(incident.metricValue) : undefined,
-          startedAt: incident.startedAt.toISOString(),
-        },
-        device: {
-          name: (incident as any).device?.name || "Unknown",
-          ip: (incident as any).device?.ip || "",
-          type: (incident as any).device?.type || "",
-          location: (incident as any).device?.location || undefined,
-        },
-        recentMetrics: (recentMetrics as any[]).map((r: any) => ({
-          time: r.bucket, metricName: r.metric_name, value: Number(r.avg_val),
-        })),
-        similarIncidents: similarIncidents.map((i) => ({
-          title: i.title, resolution: i.aiSummary || undefined,
-        })),
-      });
-
-      // Persist RCA
-      await app.db.update(incidents)
-        .set({ aiRca: JSON.stringify(rca), aiSummary: rca.summary, updatedAt: new Date() })
-        .where(eq(incidents.id, incidentId));
-
-      // Emit via WebSocket
-      if ((app as any).io) {
-        (app as any).io.emit("incident:updated", { id: incidentId, aiRca: rca });
-      }
-
-      return { rca };
-    } catch (err: any) {
-      app.log.error(err, "RCA generation failed");
-      return reply.code(500).send({ error: `RCA generation failed: ${err.message}` });
-    }
+    return { rca: (await generateIncidentRca(request, incidentId)).rca };
   });
 
   // ─── AI Provider Management ────────────────────────
@@ -184,7 +87,7 @@ Provide concise, actionable answers.`,
     type: z.enum(["openai", "gemini", "claude", "custom"]),
     apiKey: z.string().min(1),
     model: z.string().optional(),
-    baseUrl: z.string().optional(),
+    baseUrl: z.string().url().optional(),
     enabled: z.boolean().default(true),
     isDefault: z.boolean().default(false),
   });
@@ -201,7 +104,7 @@ Provide concise, actionable answers.`,
   });
 
   // Add provider
-  app.post("/providers", { preHandler: [requireRole("super_admin", "admin")] }, async (request: any, reply: any) => {
+  app.post("/providers", { schema: bodySchema(providerSchema), preHandler: [requireRole("super_admin", "admin")] }, async (request, reply) => {
     const body = providerSchema.parse(request.body);
 
     // If setting as default, unset others
@@ -209,12 +112,12 @@ Provide concise, actionable answers.`,
       await app.db.update(aiProviders).set({ isDefault: false });
     }
 
-    const [provider] = await app.db.insert(aiProviders).values(body as any).returning();
+    const [provider] = await app.db.insert(aiProviders).values(body).returning();
     return reply.code(201).send(provider);
   });
 
   // Update provider
-  app.put("/providers/:id", { preHandler: [requireRole("super_admin", "admin")] }, async (request: any) => {
+  app.put("/providers/:id", { schema: bodySchema(providerSchema.partial()), preHandler: [requireRole("super_admin", "admin")] }, async (request) => {
     const { id } = request.params as { id: string };
     const body = providerSchema.partial().parse(request.body);
 
@@ -222,25 +125,25 @@ Provide concise, actionable answers.`,
       await app.db.update(aiProviders).set({ isDefault: false });
     }
 
-    await app.db.update(aiProviders).set({ ...body, updatedAt: new Date() } as any).where(eq(aiProviders.id, id));
+    await app.db.update(aiProviders).set({ ...body, updatedAt: new Date() }).where(eq(aiProviders.id, id));
     return { ok: true };
   });
 
   // Delete provider
-  app.delete("/providers/:id", { preHandler: [requireRole("super_admin", "admin")] }, async (request: any) => {
+  app.delete("/providers/:id", { preHandler: [requireRole("super_admin", "admin")] }, async (request) => {
     const { id } = request.params as { id: string };
     await app.db.delete(aiProviders).where(eq(aiProviders.id, id));
     return { ok: true };
   });
 
   // Test provider connection
-  app.post("/providers/:id/test", { preHandler: [requireRole("super_admin", "admin")] }, async (request: any, reply: any) => {
+  app.post("/providers/:id/test", { preHandler: [requireRole("super_admin", "admin")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const provider = await app.db.query.aiProviders.findFirst({ where: eq(aiProviders.id, id) });
     if (!provider) return reply.code(404).send({ error: "Provider not found" });
 
     const engine = new AIEngine({
-      type: provider.type as any,
+      type: provider.type,
       apiKey: provider.apiKey,
       model: provider.model || undefined,
       baseUrl: provider.baseUrl || undefined,
@@ -248,6 +151,6 @@ Provide concise, actionable answers.`,
     });
 
     const result = await engine.testConnection();
-    return result;
+    return reply.code(result.ok ? 200 : 502).send(result);
   });
 }

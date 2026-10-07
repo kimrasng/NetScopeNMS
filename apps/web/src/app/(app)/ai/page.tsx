@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useEffect, useState } from "react";
 import ContentLayout from "@cloudscape-design/components/content-layout";
 import Header from "@cloudscape-design/components/header";
 import Tabs from "@cloudscape-design/components/tabs";
@@ -11,538 +11,207 @@ import Input from "@cloudscape-design/components/input";
 import Button from "@cloudscape-design/components/button";
 import Box from "@cloudscape-design/components/box";
 import Table from "@cloudscape-design/components/table";
+import Pagination from "@cloudscape-design/components/pagination";
 import Modal from "@cloudscape-design/components/modal";
 import Form from "@cloudscape-design/components/form";
 import Select from "@cloudscape-design/components/select";
 import Toggle from "@cloudscape-design/components/toggle";
 import StatusIndicator from "@cloudscape-design/components/status-indicator";
-import Spinner from "@cloudscape-design/components/spinner";
-import { useCollection } from "@cloudscape-design/collection-hooks";
+import PromptInput from "@cloudscape-design/components/prompt-input";
+import Alert from "@cloudscape-design/components/alert";
+import ExpandableSection from "@cloudscape-design/components/expandable-section";
+import Link from "@cloudscape-design/components/link";
+import { useAuth } from "@/lib/auth";
+import { canAdminister } from "@/lib/permissions";
 import { useApi } from "@/hooks/use-api";
 import { useNotifications } from "@/hooks/use-notifications";
 import { apiPost, apiPut, apiDelete } from "@/lib/api";
-import type { AIProvider, AIProviderType } from "@/lib/types";
+import type { AIProvider, AIProviderType, Incident, PaginatedResponse } from "@/lib/types";
 import { useI18n } from "@/lib/i18n";
-
-// ─── Types ────────────────────────────────────────────
+import { useCollection } from "@cloudscape-design/collection-hooks";
+import { AnalysisView, parseAnalysis } from "@/components/common/analysis-view";
 
 interface QueryResult {
   type: "data" | "answer";
   answer?: string;
+  explanation?: string;
   sql?: string;
   data?: Record<string, unknown>[];
   columns?: string[];
 }
 
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-}
-
-// ─── Constants ────────────────────────────────────────
-
-const PROVIDER_TYPE_OPTIONS = [
-  { label: "OpenAI", value: "openai" },
-  { label: "Gemini", value: "gemini" },
-  { label: "Claude", value: "claude" },
-  { label: "Custom", value: "custom" },
-];
-
-// ─── Query Tab ────────────────────────────────────────
+// ─── Query ────────────────────────────────────────────
 
 function QueryTab() {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<QueryResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleAsk = useCallback(async () => {
-    if (!query.trim()) return;
-    setLoading(true);
-    setResult(null);
-    setError(null);
-    try {
-      const res = await apiPost<QueryResult>("/api/ai/query", { query });
-      setResult(res);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Query failed");
-    } finally {
-      setLoading(false);
-    }
-  }, [query]);
-
-  return (
-    <SpaceBetween size="l">
-      <Container header={<Header variant="h2">{t("ai.query")}</Header>}>
-        <SpaceBetween size="m">
-          <FormField label={t("ai.askQuestion")}>
-            <SpaceBetween direction="horizontal" size="xs">
-              <div style={{ flex: 1 }}>
-                <Input
-                  value={query}
-                  onChange={({ detail }) => setQuery(detail.value)}
-                  placeholder={t("ai.askQuestion")}
-                  onKeyDown={({ detail }) => {
-                    if (detail.key === "Enter") handleAsk();
-                  }}
-                />
-              </div>
-              <Button variant="primary" loading={loading} onClick={handleAsk}>
-                {t("ai.ask")}
-              </Button>
-            </SpaceBetween>
-          </FormField>
+  const [error, setError] = useState("");
+  const { items, collectionProps, paginationProps } = useCollection(result?.data ?? [], { sorting: {}, pagination: { pageSize: 20 } });
+  const ask = async () => {
+    if (!query.trim() || loading) return;
+    setLoading(true); setResult(null); setError("");
+    try { setResult(await apiPost<QueryResult>("/api/ai/query", { query: query.trim() })); }
+    catch (err) { setError(err instanceof Error ? err.message : t("Query failed")); }
+    finally { setLoading(false); }
+  };
+  const columns = (result?.columns ?? []).filter(column => column !== "id" || !result?.columns?.includes("name"));
+  return <SpaceBetween size="l">
+    <Container header={<Header variant="h2">{t("ai.query")}</Header>}>
+      <SpaceBetween size="m">
+        <FormField label={t("ai.askQuestion")} description={t("Ask about devices, metrics, and incidents within your access scope.")}>
+          <PromptInput ariaLabel={t("ai.ask")} value={query} onChange={({ detail }) => setQuery(detail.value)} onAction={ask} disabled={loading} placeholder={t("Which devices are currently down?")} actionButtonIconName="send" i18nStrings={{ actionButtonAriaLabel: t("ai.ask") }} />
+        </FormField>
+        <SpaceBetween direction="horizontal" size="s">
+          {["Which devices are currently down?", "Show the devices with the highest CPU usage.", "How many incidents were opened today?"].map(example => <Button key={example} variant="inline-link" disabled={loading} onClick={() => setQuery(t(example))}>{t(example)}</Button>)}
         </SpaceBetween>
-      </Container>
-
-      {error && (
-        <Container>
-          <StatusIndicator type="error">{error}</StatusIndicator>
-        </Container>
-      )}
-
-      {result && (
-        <Container header={<Header variant="h2">{t("ai.result")}</Header>}>
-          <SpaceBetween size="m">
-            {result.sql && (
-              <FormField label={t("ai.sql")}>
-                <Box variant="code">{result.sql}</Box>
-              </FormField>
-            )}
-            {result.type === "answer" && result.answer && (
-              <Box variant="p">{result.answer}</Box>
-            )}
-            {result.type === "data" && result.data && result.columns && (
-              <Table
-                items={result.data}
-                variant="embedded"
-                columnDefinitions={result.columns.map((col) => ({
-                  id: col,
-                  header: col,
-                  cell: (item: Record<string, unknown>) => String(item[col] ?? "—"),
-                }))}
-                empty={<Box textAlign="center" color="inherit">{t("ai.result")}</Box>}
-              />
-            )}
-          </SpaceBetween>
-        </Container>
-      )}
-    </SpaceBetween>
-  );
+        {loading && <StatusIndicator type="loading">{t("ai.ask")}</StatusIndicator>}
+        {error && <Alert type="error">{error}</Alert>}
+      </SpaceBetween>
+    </Container>
+    {result && <Container header={<Header variant="h2">{t("ai.result")}</Header>}>
+      <SpaceBetween size="m">
+        {(result.answer || result.explanation) && <Box variant="p">{result.answer || result.explanation}</Box>}
+        {result.type === "data" && <Table {...collectionProps} variant="embedded" items={items} pagination={<Pagination {...paginationProps} />} columnDefinitions={columns.map(column => ({
+          id: column, header: t(column),
+          sortingField: column,
+          cell: (item: Record<string, unknown>) => column === "name" && typeof item.id === "string" && /\bFROM\s+"?devices"?\b/i.test(result.sql ?? "") ? <Link href={`/devices/${item.id}`}>{String(item[column])}</Link> : column === "status" ? t(`status.${item[column]}`) : String(item[column] ?? "—"),
+        }))} empty={t("No matching results")} />}
+        {result.sql && <ExpandableSection headerText={t("ai.sql")}><Box variant="code">{result.sql}</Box></ExpandableSection>}
+      </SpaceBetween>
+    </Container>}
+  </SpaceBetween>;
 }
 
-// ─── Chat Tab ─────────────────────────────────────────
+// ─── Incident Assistance ──────────────────────────────
 
 function ChatTab() {
   const { t } = useI18n();
   const [incidentId, setIncidentId] = useState("");
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [loading, setLoading] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  const handleSend = useCallback(async () => {
-    if (!message.trim() || !incidentId.trim()) return;
-    const userMsg: ChatMessage = { role: "user", content: message };
-    setMessages((prev) => [...prev, userMsg]);
-    setMessage("");
-    setLoading(true);
-    try {
-      const res = await apiPost<{ response: string }>("/api/ai/chat", {
-        message: userMsg.content,
-        incidentId,
-      });
-      setMessages((prev) => [...prev, { role: "assistant", content: res.response }]);
-    } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: err instanceof Error ? err.message : "Chat request failed" },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  }, [message, incidentId]);
-
-  return (
-    <SpaceBetween size="l">
-      <Container header={<Header variant="h2">{t("ai.chatWithIncident")}</Header>}>
-        <SpaceBetween size="m">
-          <FormField label={t("ai.incidentId")}>
-            <Input
-              value={incidentId}
-              onChange={({ detail }) => setIncidentId(detail.value)}
-              placeholder={t("ai.incidentId")}
-            />
-          </FormField>
-
-          {incidentId.trim() && (
-            <>
-              <div
-                ref={scrollRef}
-                style={{
-                  maxHeight: 400,
-                  overflowY: "auto",
-                  border: "1px solid var(--color-border-divider-default, #e9ebed)",
-                  borderRadius: 8,
-                  padding: 16,
-                }}
-              >
-                {messages.length === 0 ? (
-                  <Box textAlign="center" color="text-body-secondary" padding="l">
-                    {t("ai.chatWithIncident")}
-                  </Box>
-                ) : (
-                  <SpaceBetween size="m">
-                    {messages.map((msg, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          display: "flex",
-                          justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
-                        }}
-                      >
-                        <Box
-                          padding="s"
-                          variant={msg.role === "user" ? "awsui-key-label" : "p"}
-                          color={msg.role === "user" ? "text-status-info" : "inherit"}
-                        >
-                          <Box variant="small" color="text-body-secondary">
-                            {msg.role === "user" ? "You" : "AI Assistant"}
-                          </Box>
-                          {msg.content}
-                        </Box>
-                      </div>
-                    ))}
-                    {loading && <Spinner />}
-                  </SpaceBetween>
-                )}
-              </div>
-
-              <SpaceBetween direction="horizontal" size="xs">
-                <div style={{ flex: 1 }}>
-                  <Input
-                    value={message}
-                    onChange={({ detail }) => setMessage(detail.value)}
-                    placeholder={t("ai.sendMessage")}
-                    onKeyDown={({ detail }) => {
-                      if (detail.key === "Enter") handleSend();
-                    }}
-                  />
-                </div>
-                <Button variant="primary" loading={loading} onClick={handleSend} disabled={!message.trim()}>
-                  {t("ai.sendMessage")}
-                </Button>
-              </SpaceBetween>
-            </>
-          )}
-        </SpaceBetween>
-      </Container>
+  const [error, setError] = useState("");
+  const { data: incidents, loading: incidentsLoading } = useApi<PaginatedResponse<Incident>>("/api/incidents", { limit: 200 });
+  const { data: selected } = useApi<Incident & { device?: { name: string } }>(incidentId ? `/api/incidents/${incidentId}` : null);
+  useEffect(() => { setIncidentId(new URLSearchParams(window.location.search).get("incidentId") ?? ""); }, []);
+  const choices = [...(incidents?.data ?? [])];
+  if (selected && !choices.some(incident => incident.id === selected.id)) choices.unshift(selected);
+  const options = choices.map(incident => ({ value: incident.id, label: `${incident.title} · ${incident.deviceName ?? (incident.id === selected?.id ? selected.device?.name : undefined) ?? "—"}`, description: `${t(`severity.${incident.severity}`)} · ${t(`status.${incident.status}`)}` }));
+  const send = async () => {
+    if (!message.trim() || !incidentId || loading) return;
+    const question = message.trim();
+    setMessage(""); setError(""); setLoading(true);
+    setMessages(previous => [...previous, { role: "user", content: question }]);
+    try { const response = await apiPost<{ response: string }>("/api/ai/chat", { message: question, incidentId }); setMessages(previous => [...previous, { role: "assistant", content: response.response }]); }
+    catch (err) { setError(err instanceof Error ? err.message : t("Chat request failed")); setMessage(question); setMessages(previous => previous.slice(0, -1)); }
+    finally { setLoading(false); }
+  };
+  return <Container header={<Header variant="h2">{t("ai.chatWithIncident")}</Header>}>
+    <SpaceBetween size="m">
+      <FormField label={t("Incident")} description={t("Select an incident to ask about its device, events, and recent metrics.")}>
+        <Select filteringType="auto" disabled={loading} statusType={incidentsLoading ? "loading" : "finished"} options={options} selectedOption={options.find(option => option.value === incidentId) ?? null} placeholder={t("Select an incident")} empty={t("No incidents")} onChange={({ detail }) => { setIncidentId(detail.selectedOption.value ?? ""); setMessages([]); setError(""); }} />
+      </FormField>
+      {selected && <Link href={`/incidents/${selected.id}`}>{t("Open incident details")}</Link>}
+      {messages.map((entry, index) => <SpaceBetween key={index} size="xs"><Box variant="awsui-key-label">{entry.role === "user" ? t("You") : t("page.ai")}</Box>{entry.role === "assistant" && typeof parseAnalysis(entry.content)?.rootCause === "string" ? <AnalysisView raw={entry.content} /> : <Box variant="p">{entry.content}</Box>}</SpaceBetween>)}
+      {!messages.length && incidentId && <Box color="text-body-secondary">{t("Ask about the probable cause, troubleshooting steps, or recovery actions.")}</Box>}
+      {error && <Alert type="error">{error}</Alert>}
+      {loading && <StatusIndicator type="loading">{t("ai.chat")}</StatusIndicator>}
+      <PromptInput ariaLabel={t("ai.sendMessage")} value={message} onChange={({ detail }) => setMessage(detail.value)} onAction={send} disabled={!incidentId || loading} placeholder={t("ai.sendMessage")} actionButtonIconName="send" i18nStrings={{ actionButtonAriaLabel: t("ai.sendMessage") }} />
     </SpaceBetween>
-  );
+  </Container>;
 }
 
-// ─── Provider Modal ───────────────────────────────────
+// ─── Provider Administration ──────────────────────────
 
-interface ProviderFormState {
-  name: string;
-  type: AIProviderType;
-  apiKey: string;
-  model: string;
-  baseUrl: string;
-  enabled: boolean;
-  isDefault: boolean;
+interface ProviderForm {
+  name: string; type: AIProviderType; apiKey: string; model: string; baseUrl: string; enabled: boolean; isDefault: boolean;
+}
+const initialForm: ProviderForm = { name: "", type: "openai", apiKey: "", model: "", baseUrl: "", enabled: true, isDefault: false };
+
+function ProvidersTab() {
+  const { t } = useI18n();
+  const { addNotification } = useNotifications();
+  const { data: providers, loading, refetch } = useApi<AIProvider[]>("/api/ai/providers");
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(initialForm);
+  const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [testingId, setTestingId] = useState("");
+  const [deleting, setDeleting] = useState<AIProvider | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const types = ["openai", "gemini", "claude", "custom"].map(value => ({ value, label: value === "openai" ? "OpenAI" : value === "custom" ? t("Custom") : value === "gemini" ? "Gemini" : "Claude" }));
+  const open = (provider?: AIProvider) => {
+    setEditingId(provider?.id ?? null);
+    setForm(provider ? { name: provider.name, type: provider.type, apiKey: "", model: provider.model ?? "", baseUrl: provider.baseUrl ?? "", enabled: provider.enabled, isDefault: provider.isDefault } : initialForm);
+    setFormError(""); setShowModal(true);
+  };
+  const save = async () => {
+    if (!form.name.trim()) { setFormError(t("Name is required.")); return; }
+    if (!editingId && !form.apiKey.trim()) { setFormError(t("API key is required.")); return; }
+    if (form.baseUrl) { try { if (!["http:", "https:"].includes(new URL(form.baseUrl).protocol)) throw new Error(); } catch { setFormError(t("Enter an HTTP or HTTPS URL.")); return; } }
+    setSaving(true); setFormError("");
+    const body = { name: form.name.trim(), type: form.type, model: form.model || undefined, baseUrl: form.baseUrl || undefined, enabled: form.enabled, isDefault: form.isDefault, ...(form.apiKey ? { apiKey: form.apiKey } : {}) };
+    try {
+      if (editingId) await apiPut(`/api/ai/providers/${editingId}`, body); else await apiPost("/api/ai/providers", body);
+      setShowModal(false); await refetch(); addNotification({ type: "success", content: t(editingId ? "ai.updated" : "ai.created") });
+    } catch (err) { setFormError(err instanceof Error ? err.message : t("Save failed")); }
+    finally { setSaving(false); }
+  };
+  const test = async (id: string) => {
+    setTestingId(id);
+    try { await apiPost(`/api/ai/providers/${id}/test`); addNotification({ type: "success", content: t("ai.testSuccess") }); }
+    catch (err) { addNotification({ type: "error", content: err instanceof Error ? err.message : t("ai.testFailed") }); }
+    finally { setTestingId(""); }
+  };
+  const remove = async () => {
+    if (!deleting) return;
+    setDeleteBusy(true); setDeleteError("");
+    try { await apiDelete(`/api/ai/providers/${deleting.id}`); setDeleting(null); await refetch(); addNotification({ type: "success", content: t("ai.deleted") }); }
+    catch (err) { setDeleteError(err instanceof Error ? err.message : t("Delete failed")); }
+    finally { setDeleteBusy(false); }
+  };
+  return <SpaceBetween size="m">
+    <Table items={providers ?? []} loading={loading} loadingText={t("ai.providers")} variant="container" header={<Header variant="h2" counter={`(${providers?.length ?? 0})`} actions={<Button variant="primary" onClick={() => open()}>{t("ai.addProvider")}</Button>}>{t("ai.providers")}</Header>} columnDefinitions={[
+      { id: "name", header: t("ai.providerName"), cell: provider => provider.name },
+      { id: "type", header: t("ai.providerType"), cell: provider => types.find(type => type.value === provider.type)?.label },
+      { id: "model", header: t("ai.model"), cell: provider => provider.model || "—" },
+      { id: "enabled", header: t("common.enabled"), cell: provider => <StatusIndicator type={provider.enabled ? "success" : "stopped"}>{t(provider.enabled ? "common.enabled" : "Disabled")}</StatusIndicator> },
+      { id: "default", header: t("ai.isDefault"), cell: provider => provider.isDefault ? t("ai.isDefault") : "—" },
+      { id: "actions", header: t("common.actions"), cell: provider => <SpaceBetween direction="horizontal" size="xs"><Button variant="inline-link" loading={testingId === provider.id} onClick={() => test(provider.id)}>{t("ai.testProvider")}</Button><Button variant="inline-link" onClick={() => open(provider)}>{t("common.edit")}</Button><Button variant="inline-link" onClick={() => { setDeleting(provider); setDeleteError(""); }}>{t("common.delete")}</Button></SpaceBetween> },
+    ]} empty={<Box textAlign="center" padding="l"><SpaceBetween size="s"><Box variant="strong">{t("No AI providers")}</Box><Box>{t("Configure a provider to use AI queries and incident assistance.")}</Box></SpaceBetween></Box>} />
+    <Modal visible={showModal} onDismiss={() => setShowModal(false)} header={t(editingId ? "ai.editProvider" : "ai.addProvider")} footer={<Box float="right"><SpaceBetween direction="horizontal" size="xs"><Button variant="link" onClick={() => setShowModal(false)}>{t("common.cancel")}</Button><Button variant="primary" loading={saving} onClick={save}>{t(editingId ? "common.save" : "common.create")}</Button></SpaceBetween></Box>}>
+      <Form errorText={formError}><SpaceBetween size="m">
+        <FormField label={t("ai.providerName")}><Input value={form.name} onChange={({ detail }) => setForm(previous => ({ ...previous, name: detail.value }))} /></FormField>
+        <FormField label={t("ai.selectType")}><Select selectedOption={types.find(type => type.value === form.type) ?? types[0]} options={types} onChange={({ detail }) => setForm(previous => ({ ...previous, type: detail.selectedOption.value as AIProviderType }))} /></FormField>
+        <FormField label={t("ai.apiKey")} description={editingId ? t("Leave blank to keep the existing credential.") : undefined}><Input type="password" value={form.apiKey} onChange={({ detail }) => setForm(previous => ({ ...previous, apiKey: detail.value }))} /></FormField>
+        <FormField label={t("ai.model")}><Input value={form.model} onChange={({ detail }) => setForm(previous => ({ ...previous, model: detail.value }))} /></FormField>
+        <FormField label={t("ai.baseUrl")}><Input value={form.baseUrl} onChange={({ detail }) => setForm(previous => ({ ...previous, baseUrl: detail.value }))} /></FormField>
+        <Toggle checked={form.enabled} onChange={({ detail }) => setForm(previous => ({ ...previous, enabled: detail.checked }))}>{t("common.enabled")}</Toggle>
+        <Toggle checked={form.isDefault} onChange={({ detail }) => setForm(previous => ({ ...previous, isDefault: detail.checked }))}>{t("ai.isDefault")}</Toggle>
+      </SpaceBetween></Form>
+    </Modal>
+    <Modal visible={!!deleting} onDismiss={() => setDeleting(null)} header={t("common.delete")} footer={<Box float="right"><SpaceBetween direction="horizontal" size="xs"><Button variant="link" onClick={() => setDeleting(null)}>{t("common.cancel")}</Button><Button variant="primary" loading={deleteBusy} onClick={remove}>{t("common.delete")}</Button></SpaceBetween></Box>}>
+      <SpaceBetween size="m"><Box>{deleting?.name}</Box><Box>{t("Remove this AI provider?")}</Box>{deleteError && <Alert type="error">{deleteError}</Alert>}</SpaceBetween>
+    </Modal>
+  </SpaceBetween>;
 }
 
-const INITIAL_PROVIDER_FORM: ProviderFormState = {
-  name: "",
-  type: "openai",
-  apiKey: "",
-  model: "",
-  baseUrl: "",
-  enabled: true,
-  isDefault: false,
-};
-
-// ─── AI Page ──────────────────────────────────────────
+// ─── Page ──────────────────────────────────────────────
 
 export default function AIPage() {
   const { t } = useI18n();
-  const { addNotification } = useNotifications();
-  const { data: providers, loading: providersLoading, refetch } = useApi<AIProvider[]>("/api/ai/providers");
-
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<ProviderFormState>(INITIAL_PROVIDER_FORM);
-  const [saving, setSaving] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
-  const [testLoading, setTestLoading] = useState<string | null>(null);
-
-  const { items, collectionProps } = useCollection(providers ?? [], {
-    sorting: { defaultState: { sortingColumn: { sortingField: "name" } } },
-  });
-
-  const openCreate = useCallback(() => {
-    setEditingId(null);
-    setForm(INITIAL_PROVIDER_FORM);
-    setShowModal(true);
-  }, []);
-
-  const openEdit = useCallback((provider: AIProvider) => {
-    setEditingId(provider.id);
-    setForm({
-      name: provider.name,
-      type: provider.type,
-      apiKey: "",
-      model: provider.model ?? "",
-      baseUrl: provider.baseUrl ?? "",
-      enabled: provider.enabled,
-      isDefault: provider.isDefault,
-    });
-    setShowModal(true);
-  }, []);
-
-  const handleSave = useCallback(async () => {
-    setSaving(true);
-    try {
-      const body: Record<string, unknown> = {
-        name: form.name,
-        type: form.type,
-        model: form.model || undefined,
-        baseUrl: form.baseUrl || undefined,
-        enabled: form.enabled,
-        isDefault: form.isDefault,
-      };
-      if (form.apiKey) body.apiKey = form.apiKey;
-
-      if (editingId) {
-        await apiPut(`/api/ai/providers/${editingId}`, body);
-        addNotification({ type: "success", content: t("ai.updated") });
-      } else {
-        body.apiKey = form.apiKey;
-        await apiPost("/api/ai/providers", body);
-        addNotification({ type: "success", content: t("ai.created") });
-      }
-      setShowModal(false);
-      refetch();
-    } catch (err) {
-      addNotification({ type: "error", content: err instanceof Error ? err.message : t("ai.created") });
-    } finally {
-      setSaving(false);
-    }
-  }, [form, editingId, addNotification, refetch]);
-
-  const handleDelete = useCallback(async (id: string) => {
-    setDeleteLoading(id);
-    try {
-      await apiDelete(`/api/ai/providers/${id}`);
-      addNotification({ type: "success", content: t("ai.deleted") });
-      refetch();
-    } catch (err) {
-      addNotification({ type: "error", content: err instanceof Error ? err.message : t("ai.deleted") });
-    } finally {
-      setDeleteLoading(null);
-    }
-  }, [addNotification, refetch]);
-
-  const handleTest = useCallback(async (id: string) => {
-    setTestLoading(id);
-    try {
-      await apiPost(`/api/ai/providers/${id}/test`);
-      addNotification({ type: "success", content: t("ai.testSuccess") });
-    } catch (err) {
-      addNotification({ type: "error", content: err instanceof Error ? err.message : t("ai.testFailed") });
-    } finally {
-      setTestLoading(null);
-    }
-  }, [addNotification]);
-
-  return (
-    <ContentLayout header={<Header variant="h1">{t("page.ai")}</Header>}>
-      <SpaceBetween size="l">
-        <Tabs
-          tabs={[
-            { label: t("ai.query"), id: "query", content: <QueryTab /> },
-            { label: t("ai.chat"), id: "chat", content: <ChatTab /> },
-          ]}
-        />
-
-        <Table
-          {...collectionProps}
-          items={items}
-          loading={providersLoading}
-          loadingText={t("ai.providers")}
-          variant="container"
-          header={
-            <Header
-              variant="h2"
-              counter={providers ? `(${providers.length})` : undefined}
-              actions={
-                <Button variant="primary" onClick={openCreate}>
-                  {t("ai.addProvider")}
-                </Button>
-              }
-            >
-              {t("ai.providers")}
-            </Header>
-          }
-          columnDefinitions={[
-            {
-              id: "name",
-              header: t("ai.providerName"),
-              cell: (item) => item.name,
-              sortingField: "name",
-              width: 180,
-            },
-            {
-              id: "type",
-              header: t("ai.providerType"),
-              cell: (item) => item.type.charAt(0).toUpperCase() + item.type.slice(1),
-              sortingField: "type",
-              width: 120,
-            },
-            {
-              id: "model",
-              header: t("ai.model"),
-              cell: (item) => item.model ?? "—",
-              width: 180,
-            },
-            {
-              id: "enabled",
-              header: t("common.enabled"),
-              cell: (item) => (
-                <StatusIndicator type={item.enabled ? "success" : "stopped"}>
-                  {item.enabled ? t("common.enabled") : t("common.enabled")}
-                </StatusIndicator>
-              ),
-              width: 100,
-            },
-            {
-              id: "isDefault",
-              header: t("ai.isDefault"),
-              cell: (item) => (
-                <StatusIndicator type={item.isDefault ? "success" : "stopped"}>
-                  {item.isDefault ? t("ai.isDefault") : "—"}
-                </StatusIndicator>
-              ),
-              width: 100,
-            },
-            {
-              id: "createdAt",
-              header: t("common.createdAt"),
-              cell: (item) => new Date(item.createdAt).toLocaleDateString(),
-              sortingField: "createdAt",
-              width: 120,
-            },
-            {
-              id: "actions",
-              header: t("common.actions"),
-              cell: (item) => (
-                <SpaceBetween direction="horizontal" size="xs">
-                  <Button
-                    variant="inline-link"
-                    loading={testLoading === item.id}
-                    onClick={() => handleTest(item.id)}
-                  >
-                    {t("ai.testProvider")}
-                  </Button>
-                  <Button variant="inline-link" onClick={() => openEdit(item)}>{t("ai.editProvider")}</Button>
-                  <Button
-                    variant="inline-link"
-                    loading={deleteLoading === item.id}
-                    onClick={() => handleDelete(item.id)}
-                  >
-                    {t("common.delete")}
-                  </Button>
-                </SpaceBetween>
-              ),
-              width: 200,
-            },
-          ]}
-          empty={
-            <Box textAlign="center" color="inherit" padding="l">
-              <SpaceBetween size="m">
-                <Box variant="strong">{t("ai.providers")}</Box>
-                <Box variant="p" color="inherit">{t("ai.addProvider")}</Box>
-                <Button variant="primary" onClick={openCreate}>{t("ai.addProvider")}</Button>
-              </SpaceBetween>
-            </Box>
-          }
-        />
-
-        <Modal
-          visible={showModal}
-          onDismiss={() => setShowModal(false)}
-          header={editingId ? t("ai.editProvider") : t("ai.addProvider")}
-          footer={
-            <Box float="right">
-              <SpaceBetween direction="horizontal" size="xs">
-                <Button variant="link" onClick={() => setShowModal(false)}>{t("common.cancel")}</Button>
-                <Button variant="primary" loading={saving} onClick={handleSave}>
-                  {editingId ? t("common.save") : t("common.create")}
-                </Button>
-              </SpaceBetween>
-            </Box>
-          }
-        >
-          <Form>
-            <SpaceBetween size="m">
-              <FormField label={t("ai.providerName")}>
-                <Input
-                  value={form.name}
-                  onChange={({ detail }) => setForm((f) => ({ ...f, name: detail.value }))}
-                />
-              </FormField>
-              <FormField label={t("ai.selectType")}>
-                <Select
-                  selectedOption={PROVIDER_TYPE_OPTIONS.find((o) => o.value === form.type) ?? PROVIDER_TYPE_OPTIONS[0]}
-                  onChange={({ detail }) =>
-                    setForm((f) => ({ ...f, type: detail.selectedOption.value as AIProviderType }))
-                  }
-                  options={PROVIDER_TYPE_OPTIONS}
-                />
-              </FormField>
-              <FormField label={t("ai.apiKey")}>
-                <Input
-                  value={form.apiKey}
-                  onChange={({ detail }) => setForm((f) => ({ ...f, apiKey: detail.value }))}
-                  type="password"
-                />
-              </FormField>
-              <FormField label={t("ai.model")}>
-                <Input
-                  value={form.model}
-                  onChange={({ detail }) => setForm((f) => ({ ...f, model: detail.value }))}
-                />
-              </FormField>
-              <FormField label={t("ai.baseUrl")}>
-                <Input
-                  value={form.baseUrl}
-                  onChange={({ detail }) => setForm((f) => ({ ...f, baseUrl: detail.value }))}
-                />
-              </FormField>
-              <FormField label={t("common.enabled")}>
-                <Toggle
-                  checked={form.enabled}
-                  onChange={({ detail }) => setForm((f) => ({ ...f, enabled: detail.checked }))}
-                />
-              </FormField>
-              <FormField label={t("ai.isDefault")}>
-                <Toggle
-                  checked={form.isDefault}
-                  onChange={({ detail }) => setForm((f) => ({ ...f, isDefault: detail.checked }))}
-                />
-              </FormField>
-            </SpaceBetween>
-          </Form>
-        </Modal>
-      </SpaceBetween>
-    </ContentLayout>
-  );
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState("query");
+  useEffect(() => { if (new URLSearchParams(window.location.search).has("incidentId")) setActiveTab("chat"); }, []);
+  return <ContentLayout header={<Header variant="h1" description={t("Ask about network resources and investigate incidents.")}>{t("page.ai")}</Header>}>
+    <Tabs activeTabId={activeTab} onChange={({ detail }) => setActiveTab(detail.activeTabId)} tabs={[
+      { id: "query", label: t("ai.query"), content: <QueryTab /> },
+      { id: "chat", label: t("ai.chat"), content: <ChatTab /> },
+      ...(canAdminister(user) ? [{ id: "providers", label: t("ai.providers"), content: <ProvidersTab /> }] : []),
+    ]} />
+  </ContentLayout>;
 }

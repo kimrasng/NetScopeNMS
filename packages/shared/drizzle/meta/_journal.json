@@ -15,6 +15,34 @@
       "when": 1775896289577,
       "tag": "0001_sharp_dark_beast",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790898082056,
+      "tag": "0002_qa_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790899162388,
+      "tag": "0003_monitoring_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790907330827,
+      "tag": "0004_account_deletion",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790909333460,
+      "tag": "0005_ssh_host_verification",
+      "breakpoints": true
     }
   ]
 }

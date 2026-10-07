@@ -1,3 +1,4 @@
+import { bodySchema } from "../services/contracts.js";
 import type { FastifyInstance } from "fastify";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { z } from "zod";
@@ -7,7 +8,7 @@ import { authenticate } from "../middleware/auth.js";
 
 const createApiKeySchema = z.object({
   name: z.string().min(1).max(255),
-  expiresAt: z.string().datetime().optional(),
+  expiresAt: z.string().refine(value => /^\d{4}-\d{2}-\d{2}$/.test(value) || z.string().datetime({ offset: true }).safeParse(value).success, "Use an ISO date or datetime").transform(value => value.length === 10 ? `${value}T23:59:59.999Z` : value).refine(value => Number.isFinite(Date.parse(value)) && Date.parse(value) > Date.now(), "Expiry must be a future date").optional(),
 });
 
 export async function apiKeyRoutes(app: FastifyInstance) {
@@ -27,7 +28,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
     return { data: items };
   });
 
-  app.post("/", { preHandler: [authenticate] }, async (request, reply) => {
+  app.post("/", { schema: bodySchema(createApiKeySchema), preHandler: [authenticate] }, async (request, reply) => {
     const body = createApiKeySchema.parse(request.body);
     const rawKey = `${randomUUID()}${randomBytes(16).toString("hex")}`;
     const keyHash = createHash("sha256").update(rawKey).digest("hex");
@@ -45,8 +46,8 @@ export async function apiKeyRoutes(app: FastifyInstance) {
       .returning();
 
     return reply.code(201).send({
-      ...apiKey,
-      key: rawKey,
+      id: apiKey.id, name: apiKey.name, prefix: apiKey.prefix, expiresAt: apiKey.expiresAt, createdAt: apiKey.createdAt,
+      rawKey, key: rawKey,
     });
   });
 

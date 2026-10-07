@@ -1,8 +1,10 @@
 "use client";
+import { formatDate } from "@/lib/date-format";
 
 import { useState, useCallback } from "react";
-import ContentLayout from "@cloudscape-design/components/content-layout";
 import Header from "@cloudscape-design/components/header";
+import Link from "@cloudscape-design/components/link";
+import { useAuth } from "@/lib/auth";
 import Table from "@cloudscape-design/components/table";
 import Button from "@cloudscape-design/components/button";
 import SpaceBetween from "@cloudscape-design/components/space-between";
@@ -23,6 +25,7 @@ import type { Dashboard } from "@/lib/types";
 
 export default function DashboardsPage() {
   const { t } = useI18n();
+  const { user } = useAuth();
   const { addNotification } = useNotifications();
   const { data, loading, refetch } = useApi<{ data: Dashboard[] }>("/api/dashboards");
 
@@ -30,6 +33,7 @@ export default function DashboardsPage() {
   const [formName, setFormName] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formShared, setFormShared] = useState(false);
+  const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [duplicateLoading, setDuplicateLoading] = useState<string | null>(null);
@@ -44,10 +48,12 @@ export default function DashboardsPage() {
     setFormName("");
     setFormDescription("");
     setFormShared(false);
-    setShowModal(true);
+    setFormError(""); setShowModal(true);
   }, []);
 
   const handleCreate = useCallback(async () => {
+    setFormError("");
+    if (!formName.trim()) { setFormError(t("Name is required.")); return; }
     setSaving(true);
     try {
       await apiPost("/api/dashboards", {
@@ -59,7 +65,7 @@ export default function DashboardsPage() {
       setShowModal(false);
       refetch();
     } catch (err) {
-      addNotification({ type: "error", content: err instanceof Error ? err.message : "Failed to create dashboard." });
+      setFormError(err instanceof Error ? err.message : t("Failed to create dashboard."));
     } finally {
       setSaving(false);
     }
@@ -92,17 +98,16 @@ export default function DashboardsPage() {
   }, [addNotification, refetch, t]);
 
   return (
-    <ContentLayout header={<Header variant="h1">{t("page.dashboards")}</Header>}>
+    <>
       <Table
         {...collectionProps}
         items={items}
         loading={loading}
-        loadingText="Loading dashboards..."
+        loadingText={t("Loading dashboards...")}
         variant="full-page"
         stickyHeader
         header={
-          <Header
-            variant="h2"
+          <Header variant="awsui-h1-sticky"
             counter={dashboards.length > 0 ? `(${dashboards.length})` : undefined}
             actions={
               <Button variant="primary" onClick={openCreate}>
@@ -117,7 +122,7 @@ export default function DashboardsPage() {
           {
             id: "name",
             header: t("dashboards.name"),
-            cell: (item) => item.name,
+            cell: (item) => <Link href={`/dashboards/${item.id}`}>{item.name}</Link>,
             sortingField: "name",
             width: 200,
           },
@@ -132,7 +137,7 @@ export default function DashboardsPage() {
             header: t("dashboards.isDefault"),
             cell: (item) => (
               <StatusIndicator type={item.isDefault ? "success" : "stopped"}>
-                {item.isDefault ? "Yes" : "No"}
+                {t(item.isDefault ? "Yes" : "No")}
               </StatusIndicator>
             ),
             width: 100,
@@ -142,7 +147,7 @@ export default function DashboardsPage() {
             header: t("dashboards.isShared"),
             cell: (item) => (
               <StatusIndicator type={item.isShared ? "success" : "stopped"}>
-                {item.isShared ? "Yes" : "No"}
+                {t(item.isShared ? "Yes" : "No")}
               </StatusIndicator>
             ),
             width: 100,
@@ -150,7 +155,7 @@ export default function DashboardsPage() {
           {
             id: "createdAt",
             header: t("common.createdAt"),
-            cell: (item) => new Date(item.createdAt).toLocaleDateString(),
+            cell: (item) => formatDate(new Date(item.createdAt)),
             sortingField: "createdAt",
             width: 130,
           },
@@ -168,7 +173,7 @@ export default function DashboardsPage() {
                 </Button>
                 <Button
                   variant="inline-link"
-                  loading={deleteLoading === item.id}
+                  disabled={item.userId !== user?.id} loading={deleteLoading === item.id}
                   onClick={() => handleDelete(item.id)}
                 >
                   {t("common.delete")}
@@ -181,9 +186,9 @@ export default function DashboardsPage() {
         empty={
           <Box textAlign="center" color="inherit" padding="l">
             <SpaceBetween size="m">
-              <Box variant="strong">No dashboards</Box>
-              <Box variant="p" color="inherit">Create a custom dashboard to visualize your network data.</Box>
-              <Button variant="primary" onClick={openCreate}>{t("dashboards.createDashboard")}</Button>
+              <Box variant="strong">{t("No dashboards")}</Box>
+              <Box variant="p" color="inherit">{t("Create a custom dashboard to visualize your network data.")}</Box>
+
             </SpaceBetween>
           </Box>
         }
@@ -202,7 +207,7 @@ export default function DashboardsPage() {
           </Box>
         }
       >
-        <Form>
+        <Form errorText={formError}>
           <SpaceBetween size="m">
             <FormField label={t("dashboards.name")}>
               <Input
@@ -221,12 +226,11 @@ export default function DashboardsPage() {
                 checked={formShared}
                 onChange={({ detail }) => setFormShared(detail.checked)}
               >
-                Make this dashboard visible to all users
-              </Toggle>
+                {t("Make this dashboard visible to all users")}</Toggle>
             </FormField>
           </SpaceBetween>
         </Form>
       </Modal>
-    </ContentLayout>
+    </>
   );
 }

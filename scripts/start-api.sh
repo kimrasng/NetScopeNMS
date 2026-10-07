@@ -2,7 +2,7 @@
 set -e
 
 echo "Running database migrations..."
-cd /app/packages/shared && npx drizzle-kit migrate
+cd /app && yarn db:migrate
 echo "Migrations complete."
 
 echo "Starting API server..."

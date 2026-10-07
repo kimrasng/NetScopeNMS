@@ -1,7 +1,7 @@
 "use client";
+import { formatDateTime } from "@/lib/date-format";
 
 import { useState, useCallback, useEffect } from "react";
-import ContentLayout from "@cloudscape-design/components/content-layout";
 import Header from "@cloudscape-design/components/header";
 import Table from "@cloudscape-design/components/table";
 import SpaceBetween from "@cloudscape-design/components/space-between";
@@ -10,38 +10,25 @@ import Pagination from "@cloudscape-design/components/pagination";
 import Select from "@cloudscape-design/components/select";
 import DateRangePicker from "@cloudscape-design/components/date-range-picker";
 import type { DateRangePickerProps } from "@cloudscape-design/components/date-range-picker";
-import Input from "@cloudscape-design/components/input";
+import { useApi } from "@/hooks/use-api";
 import { useNotifications } from "@/hooks/use-notifications";
+import { useTablePreferences } from "@/hooks/use-table-preferences";
 import { useI18n } from "@/lib/i18n";
 import { apiGet, ApiError } from "@/lib/api";
 import type { AuditLog, PaginatedResponse } from "@/lib/types";
 
 const PAGE_SIZE = 50;
 
-const ACTION_OPTIONS = [
-  { label: "All Actions", value: "" },
-  { label: "Create", value: "create" },
-  { label: "Update", value: "update" },
-  { label: "Delete", value: "delete" },
-  { label: "Login", value: "login" },
-  { label: "Logout", value: "logout" },
-];
-
-const RESOURCE_OPTIONS = [
-  { label: "All Resources", value: "" },
-  { label: "Device", value: "device" },
-  { label: "Incident", value: "incident" },
-  { label: "Alert Rule", value: "alert_rule" },
-  { label: "User", value: "user" },
-  { label: "API Key", value: "api_key" },
-  { label: "Notification Channel", value: "notification_channel" },
-  { label: "Maintenance Window", value: "maintenance_window" },
-  { label: "Report", value: "report" },
-];
+interface AuditOptions {
+  actions: string[];
+  resources: string[];
+  users: { id: string; name: string; email: string }[];
+}
 
 export default function AuditLogsPage() {
   const { t } = useI18n();
   const { addNotification } = useNotifications();
+  const { data: options, loading: optionsLoading } = useApi<AuditOptions>("/api/audit-logs/options");
 
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,8 +36,8 @@ export default function AuditLogsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
-  const [actionFilter, setActionFilter] = useState(ACTION_OPTIONS[0]);
-  const [resourceFilter, setResourceFilter] = useState(RESOURCE_OPTIONS[0]);
+  const [actionFilter, setActionFilter] = useState("");
+  const [resourceFilter, setResourceFilter] = useState("");
   const [dateRange, setDateRange] = useState<DateRangePickerProps.Value | null>(null);
   const [userIdFilter, setUserIdFilter] = useState("");
 
@@ -61,13 +48,13 @@ export default function AuditLogsPage() {
         page: p,
         limit: PAGE_SIZE,
       };
-      if (actionFilter.value) params.action = actionFilter.value;
-      if (resourceFilter.value) params.resource = resourceFilter.value;
+      if (actionFilter) params.action = actionFilter;
+      if (resourceFilter) params.resource = resourceFilter;
       if (userIdFilter.trim()) params.userId = userIdFilter.trim();
       if (dateRange) {
         if (dateRange.type === "absolute") {
-          params.startDate = dateRange.startDate;
-          params.endDate = dateRange.endDate;
+          params.from = new Date(dateRange.startDate).toISOString();
+          params.to = new Date(dateRange.endDate).toISOString();
         } else {
           const now = new Date();
           const ms = dateRange.amount * (
@@ -79,8 +66,8 @@ export default function AuditLogsPage() {
             dateRange.unit === "month" ? 2_592_000_000 :
             31_536_000_000
           );
-          params.startDate = new Date(now.getTime() - ms).toISOString();
-          params.endDate = now.toISOString();
+          params.from = new Date(now.getTime() - ms).toISOString();
+          params.to = now.toISOString();
         }
       }
 
@@ -90,11 +77,11 @@ export default function AuditLogsPage() {
       setTotal(result.pagination.total);
     } catch (err) {
       const message = err instanceof ApiError ? err.body.error : "Failed to load audit logs.";
-      addNotification({ type: "error", content: message });
+      if (!(err instanceof ApiError)) addNotification({ type: "error", content: t(message) });
     } finally {
       setLoading(false);
     }
-  }, [actionFilter, resourceFilter, dateRange, userIdFilter, addNotification]);
+  }, [actionFilter, resourceFilter, dateRange, userIdFilter, addNotification, t]);
 
   useEffect(() => {
     fetchLogs(page);
@@ -104,80 +91,69 @@ export default function AuditLogsPage() {
     setPage(1);
   }, [actionFilter, resourceFilter, dateRange, userIdFilter]);
 
+  const tablePreferences = useTablePreferences([{ id: "action", label: "auditLog.action" }, { id: "resource", label: "auditLog.resource" }, { id: "resourceId", label: "auditLog.resourceId", visible: false }, { id: "userId", label: "common.user" }, { id: "ipAddress", label: "auditLog.ipAddress" }, { id: "createdAt", label: "common.createdAt" }]);
+  const actionOptions = [{ value: "", label: t("All Actions") }, ...(options?.actions ?? []).map(value => ({ value, label: value }))];
+  const resourceOptions = [{ value: "", label: t("All Resources") }, ...(options?.resources ?? []).map(value => ({ value, label: t(value) }))];
+  const userOptions = [{ value: "", label: t("All users") }, ...(options?.users ?? []).map(user => ({ value: user.id, label: user.name, description: user.email }))];
+
   return (
-    <ContentLayout header={<Header variant="h1">{t("page.auditLogs")}</Header>}>
+    <>
       <Table
+        {...tablePreferences}
         items={logs}
         loading={loading}
-        loadingText="Loading audit logs..."
+        loadingText={t("Loading audit logs...")}
         variant="full-page"
         stickyHeader
         sortingDisabled
         header={
-          <Header variant="h2" counter={`(${total})`}>
+          <Header variant="awsui-h1-sticky" counter={`(${total})`}>
             {t("page.auditLogs")}
           </Header>
         }
         filter={
           <SpaceBetween direction="horizontal" size="xs">
             <Select
-              selectedOption={actionFilter}
-              onChange={({ detail }) => setActionFilter(detail.selectedOption as typeof actionFilter)}
-              options={ACTION_OPTIONS}
+              selectedOption={actionOptions.find(option => option.value === actionFilter) ?? actionOptions[0]}
+              onChange={({ detail }) => setActionFilter(detail.selectedOption.value ?? "")}
+              options={actionOptions}
+              filteringType="auto"
+              loadingText={t("common.loading")}
+              statusType={optionsLoading ? "loading" : "finished"}
+              ariaLabel={t("auditLog.filterByAction")}
               placeholder={t("auditLog.filterByAction")}
             />
             <Select
-              selectedOption={resourceFilter}
-              onChange={({ detail }) => setResourceFilter(detail.selectedOption as typeof resourceFilter)}
-              options={RESOURCE_OPTIONS}
+              selectedOption={resourceOptions.find(option => option.value === resourceFilter) ?? resourceOptions[0]}
+              onChange={({ detail }) => setResourceFilter(detail.selectedOption.value ?? "")}
+              options={resourceOptions}
+              ariaLabel={t("auditLog.filterByResource")}
               placeholder={t("auditLog.filterByResource")}
             />
-            <Input
-              value={userIdFilter}
-              onChange={({ detail }) => setUserIdFilter(detail.value)}
-              placeholder="User ID"
-              type="search"
+            <Select
+              selectedOption={userOptions.find(option => option.value === userIdFilter) ?? userOptions[0]}
+              options={userOptions}
+              onChange={({ detail }) => setUserIdFilter(detail.selectedOption.value ?? "")}
+              filteringType="auto"
+              ariaLabel={t("common.user")}
             />
             <DateRangePicker
               value={dateRange}
               onChange={({ detail }) => setDateRange(detail.value)}
-              placeholder="Date range"
+              placeholder={t("Date range")}
               relativeOptions={[
                 { key: "1h", amount: 1, unit: "hour", type: "relative" },
                 { key: "24h", amount: 24, unit: "hour", type: "relative" },
                 { key: "7d", amount: 7, unit: "day", type: "relative" },
                 { key: "30d", amount: 30, unit: "day", type: "relative" },
               ]}
-              i18nStrings={{
-                todayAriaLabel: "Today",
-                nextMonthAriaLabel: "Next month",
-                previousMonthAriaLabel: "Previous month",
-                customRelativeRangeDurationLabel: "Duration",
-                customRelativeRangeDurationPlaceholder: "Enter duration",
-                customRelativeRangeOptionLabel: "Custom range",
-                customRelativeRangeOptionDescription: "Set a custom range in the past",
-                customRelativeRangeUnitLabel: "Unit of time",
-                formatRelativeRange: (value) => {
-                  const unit = value.amount === 1 ? value.unit : `${value.unit}s`;
-                  return `Last ${value.amount} ${unit}`;
-                },
-                formatUnit: (unit, value) => (value === 1 ? unit : `${unit}s`),
-                dateTimeConstraintText: "",
-                relativeModeTitle: "Relative range",
-                absoluteModeTitle: "Absolute range",
-                relativeRangeSelectionHeading: "Choose a range",
-                startDateLabel: "Start date",
-                startTimeLabel: "Start time",
-                endDateLabel: "End date",
-                endTimeLabel: "End time",
-                clearButtonLabel: "Clear",
-                cancelButtonLabel: "Cancel",
-                applyButtonLabel: "Apply",
-              }}
               isValidRange={(value) => {
                 if (value?.type === "absolute") {
                   if (!value.startDate || !value.endDate) {
-                    return { valid: false, errorMessage: "Select a complete date range." };
+                    return { valid: false, errorMessage: t("Select a complete date range.") };
+                  }
+                  if (!Number.isFinite(Date.parse(value.startDate)) || !Number.isFinite(Date.parse(value.endDate)) || Date.parse(value.startDate) >= Date.parse(value.endDate)) {
+                    return { valid: false, errorMessage: t("End time must be after start time.") };
                   }
                 }
                 return { valid: true };
@@ -202,7 +178,7 @@ export default function AuditLogsPage() {
           {
             id: "resource",
             header: t("auditLog.resource"),
-            cell: (item) => item.resource,
+            cell: (item) => t(item.resource),
             width: 160,
           },
           {
@@ -213,8 +189,8 @@ export default function AuditLogsPage() {
           },
           {
             id: "userId",
-            header: t("auditLog.userId"),
-            cell: (item) => item.userId ? <Box variant="code">{item.userId}</Box> : "System",
+            header: t("User"),
+            cell: (item) => item.userName ?? t("System / removed account"),
             width: 200,
           },
           {
@@ -226,19 +202,19 @@ export default function AuditLogsPage() {
           {
             id: "createdAt",
             header: t("auditLog.createdAt"),
-            cell: (item) => new Date(item.createdAt).toLocaleString(),
+            cell: (item) => formatDateTime(new Date(item.createdAt)),
             width: 200,
           },
         ]}
         empty={
           <Box textAlign="center" color="inherit">
             <SpaceBetween size="m">
-              <b>No audit logs</b>
-              <Box variant="p" color="inherit">No logs match the current filters.</Box>
+              <b>{t("No audit logs")}</b>
+              <Box variant="p" color="inherit">{t("No logs match the current filters.")}</Box>
             </SpaceBetween>
           </Box>
         }
       />
-    </ContentLayout>
+    </>
   );
 }

@@ -8,8 +8,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npx turbo run dev",
-    "build": "npx turbo run build",
+    "dev": "turbo run dev",
+    "build": "turbo run build",
     "dev:api": "yarn workspace @netpulse/api dev",
     "dev:web": "yarn workspace @netpulse/web dev",
     "db:generate": "yarn workspace @netpulse/api db:generate",
@@ -19,8 +19,14 @@
     "docker:down": "docker compose down",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "npx turbo run lint",
-    "clean": "npx turbo run clean"
+    "lint": "turbo run lint",
+    "clean": "turbo run clean",
+    "test:integration": "node scripts/integration-test.mjs",
+    "test:monitoring": "node scripts/monitoring-test.mjs",
+    "test:ssh": "node scripts/ssh-test.mjs",
+    "test:features": "node scripts/feature-test.mjs",
+    "test:upgrade": "node scripts/upgrade-test.mjs",
+    "test:e2e": "playwright test"
   },
   "keywords": [
     "nms",
@@ -30,6 +36,13 @@
   "license": "ISC",
   "packageManager": "yarn@1.22.22",
   "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "eslint": "8.57.1",
+    "eslint-config-next": "14.2.35",
+    "turbo": "2.11.6",
     "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=22 <25"
   }
 }

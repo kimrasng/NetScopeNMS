@@ -25,6 +25,8 @@ declare module "net-snmp" {
       type: number;
       enterprise?: string;
       specificTrap?: number;
+      contextEngineID?: string;
+      user?: string;
       varbinds: Varbind[];
     };
     rinfo: {
@@ -34,11 +36,12 @@ declare module "net-snmp" {
   }
 
   interface Receiver {
+    getAuthorizer(): { addCommunity(community: string): void; addUser(user: Record<string, unknown>): void };
     close(): void;
   }
 
   function createReceiver(
-    options: { port?: number; disableAuthorization?: boolean; community?: string },
+    options: { port?: number; disableAuthorization?: boolean; community?: string; includeAuthentication?: boolean },
     callback: (error: Error | null, notification: TrapNotification) => void,
   ): Receiver;
 

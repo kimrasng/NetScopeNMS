@@ -41,6 +41,21 @@ describe("Notification", () => {
   });
 
   describe("dispatchNotification", () => {
+    it.each([
+      { type: "telegram", config: { botToken: "qa", chatId: "qa" } },
+      { type: "discord", config: { webhookUrl: "https://example.test/discord" } },
+      { type: "slack", config: { webhookUrl: "https://example.test/slack" } },
+      { type: "sms", config: { twilio: { sid: "qa", token: "qa", from: "+10000000000" }, to: "+10000000001" } },
+      { type: "pagerduty", config: { routingKey: "qa" } },
+      { type: "webhook", config: { url: "https://example.test/webhook" } },
+    ])("rejects HTTP failures for $type", async channel => {
+      fetchMock.mockResolvedValue({ ok: false, status: 503 });
+      await expect(mod.dispatchNotification(channel, makePayload())).rejects.toThrow("HTTP 503");
+    });
+    it("rejects invalid configuration before attempting delivery", async () => {
+      await expect(mod.dispatchNotification({ type: "webhook", config: { url: "ftp://example.test" } }, makePayload())).rejects.toThrow();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
     it("routes email channel", async () => {
       const channel: ChannelConfig = {
         type: "email",
@@ -122,12 +137,9 @@ describe("Notification", () => {
       expect(url).toBe("https://example.com/hook");
     });
 
-    it("logs warning for unknown channel type", async () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    it("rejects unknown channel types instead of reporting delivery success", async () => {
       const channel: ChannelConfig = { type: "carrier-pigeon", config: {} };
-      await mod.dispatchNotification(channel, makePayload());
-
-      expect(warnSpy).toHaveBeenCalledWith("Unknown notification channel type: carrier-pigeon");
+      await expect(mod.dispatchNotification(channel, makePayload())).rejects.toThrow("Unsupported notification channel type");
     });
   });
 

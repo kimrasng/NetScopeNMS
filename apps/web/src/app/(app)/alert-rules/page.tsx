@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import ContentLayout from "@cloudscape-design/components/content-layout";
 import Header from "@cloudscape-design/components/header";
 import Table from "@cloudscape-design/components/table";
 import Button from "@cloudscape-design/components/button";
@@ -9,7 +8,11 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import Box from "@cloudscape-design/components/box";
 import Badge from "@cloudscape-design/components/badge";
 import Modal from "@cloudscape-design/components/modal";
-import Form from "@cloudscape-design/components/form";
+import Wizard from "@cloudscape-design/components/wizard";
+import Autosuggest from "@cloudscape-design/components/autosuggest";
+import ExpandableSection from "@cloudscape-design/components/expandable-section";
+import Alert from "@cloudscape-design/components/alert";
+import Link from "@cloudscape-design/components/link";
 import FormField from "@cloudscape-design/components/form-field";
 import Input from "@cloudscape-design/components/input";
 import Select from "@cloudscape-design/components/select";
@@ -21,7 +24,11 @@ import { useApi } from "@/hooks/use-api";
 import { useNotifications } from "@/hooks/use-notifications";
 import { apiPost, apiPut, apiDelete } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import type { AlertRule, Severity } from "@/lib/types";
+import { useAuth } from "@/lib/auth";
+import { canAdminister } from "@/lib/permissions";
+import Multiselect from "@cloudscape-design/components/multiselect";
+import { ResourceScopeFields } from "@/components/common/resource-scope-fields";
+import type { NotificationChannel, AlertRule, Severity, Device, DeviceGroup, PaginatedResponse } from "@/lib/types";
 
 // ─── Constants ────────────────────────────────────────
 
@@ -52,6 +59,7 @@ interface RuleFormState {
   enabled: boolean;
   flapThreshold: string;
   flapWindow: string;
+  channels: string[]; escalationChannels: string[]; escalationMinutes: string; runbookUrl: string;
 }
 
 const EMPTY_FORM: RuleFormState = {
@@ -64,13 +72,17 @@ const EMPTY_FORM: RuleFormState = {
   groupId: "",
   enabled: true,
   flapThreshold: "3",
-  flapWindow: "300",
+  flapWindow: "5",
+  channels: [], escalationChannels: [], escalationMinutes: "", runbookUrl: "",
 };
 
 // ─── Alert Rules Page ─────────────────────────────────
 
 export default function AlertRulesPage() {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const { data: channels } = useApi<NotificationChannel[]>("/api/notifications/channels");
+  const channelOptions = (channels ?? []).map(channel => ({ label: channel.name, value: channel.id }));
   const { addNotification } = useNotifications();
   const { data, loading, refetch } = useApi<AlertRule[]>("/api/alert-rules");
 
@@ -81,6 +93,11 @@ export default function AlertRulesPage() {
     { value: "low", label: t("severity.low") },
   ], [t]);
 
+  const { data: devices } = useApi<{ nodes: Device[] }>("/api/topology/graph");
+  const { data: groups } = useApi<PaginatedResponse<DeviceGroup>>("/api/device-groups", { limit: 200 });
+  const [step, setStep] = useState(0);
+  const [formError, setFormError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
   const [form, setForm] = useState<RuleFormState>(EMPTY_FORM);
@@ -93,12 +110,12 @@ export default function AlertRulesPage() {
     filtering: {
       empty: (
         <Box textAlign="center" color="inherit">
-          <Box variant="strong">{t("page.alertRules")}</Box>
+          <Box variant="strong">{t("No matching alert rules")}</Box>
         </Box>
       ),
       noMatch: (
         <Box textAlign="center" color="inherit">
-          <Box variant="strong">{t("page.alertRules")}</Box>
+          <Box variant="strong">{t("No matching alert rules")}</Box>
         </Box>
       ),
     },
@@ -110,6 +127,7 @@ export default function AlertRulesPage() {
   const openCreate = useCallback(() => {
     setEditingRule(null);
     setForm(EMPTY_FORM);
+    setStep(0); setFormError(""); setFieldErrors({});
     setModalVisible(true);
   }, []);
 
@@ -126,12 +144,24 @@ export default function AlertRulesPage() {
       enabled: rule.enabled,
       flapThreshold: String(rule.flapThreshold),
       flapWindow: String(rule.flapWindow),
+      channels: rule.channels, escalationChannels: rule.escalationChannels ?? [], escalationMinutes: String(rule.escalationMinutes ?? ""), runbookUrl: rule.runbookUrl ?? "",
     });
+    setStep(0); setFormError(""); setFieldErrors({});
     setModalVisible(true);
-  }, []);
+  }, [SEVERITY_OPTIONS]);
+
+  const validateCore = useCallback(() => {
+    const errors: Record<string, string> = {};
+    if (!form.name.trim()) errors.name = t("Name is required.");
+    if (!form.metricName.trim()) errors.metric = t("Select a metric.");
+    if (!form.threshold.trim() || !Number.isFinite(Number(form.threshold))) errors.threshold = t("Enter a numeric threshold.");
+    setFieldErrors(errors);
+    return !Object.keys(errors).length;
+  }, [form.name, form.metricName, form.threshold, t]);
 
   const handleSubmit = useCallback(async () => {
-    if (!form.name || !form.metricName || !form.operator || !form.threshold || !form.severity) return;
+    if (!validateCore() || !form.operator || !form.severity) return;
+    setFormError("");
     setSubmitting(true);
     try {
       const body = {
@@ -140,11 +170,12 @@ export default function AlertRulesPage() {
         operator: form.operator.value,
         threshold: Number(form.threshold),
         severity: form.severity.value,
-        deviceId: form.deviceId || undefined,
-        groupId: form.groupId || undefined,
+        deviceId: form.deviceId || null,
+        groupId: form.groupId || null,
         enabled: form.enabled,
         flapThreshold: Number(form.flapThreshold),
         flapWindow: Number(form.flapWindow),
+        channels: form.channels, escalationChannels: form.escalationChannels, escalationMinutes: form.escalationMinutes ? Number(form.escalationMinutes) : null, runbookUrl: form.runbookUrl || null,
       };
       if (editingRule) {
         await apiPut(`/api/alert-rules/${editingRule.id}`, body);
@@ -155,12 +186,12 @@ export default function AlertRulesPage() {
       }
       setModalVisible(false);
       refetch();
-    } catch {
-      addNotification({ type: "error", content: editingRule ? t("alertRule.updated") : t("alertRule.created") });
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : t("Rule update failed"));
     } finally {
       setSubmitting(false);
     }
-  }, [form, editingRule, addNotification, refetch]);
+  }, [form, editingRule, addNotification, refetch, t, validateCore]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -172,7 +203,7 @@ export default function AlertRulesPage() {
     } catch {
       addNotification({ type: "error", content: t("alertRule.deleted") });
     }
-  }, [deleteTarget, addNotification, refetch]);
+  }, [deleteTarget, addNotification, refetch, t]);
 
   const handleToggleEnabled = useCallback(async (rule: AlertRule) => {
     try {
@@ -181,10 +212,10 @@ export default function AlertRulesPage() {
     } catch {
       addNotification({ type: "error", content: t("alertRule.updated") });
     }
-  }, [addNotification, refetch]);
+  }, [addNotification, refetch, t]);
 
   return (
-    <ContentLayout header={<Header variant="h1">{t("page.alertRules")}</Header>}>
+    <>
       <Table
         {...collectionProps}
         items={items}
@@ -193,10 +224,10 @@ export default function AlertRulesPage() {
         variant="full-page"
         stickyHeader
         header={
-          <Header
+          <Header variant="awsui-h1-sticky"
             counter={`(${rules.length})`}
             actions={
-              <Button variant="primary" onClick={openCreate}>{t("alertRule.createRule")}</Button>
+              <Button variant="primary" disabled={!canAdminister(user)} onClick={openCreate}>{t("alertRule.createRule")}</Button>
             }
           >
             {t("page.alertRules")}
@@ -220,7 +251,7 @@ export default function AlertRulesPage() {
           {
             id: "metric",
             header: t("alertRule.metric"),
-            cell: (item) => item.metricName,
+            cell: (item) => t(`metric.${item.metricName}`),
             sortingField: "metricName",
             width: 150,
           },
@@ -244,7 +275,7 @@ export default function AlertRulesPage() {
           {
             id: "target",
             header: t("alertRule.device"),
-            cell: (item) => item.deviceId ?? item.groupId ?? "All",
+            cell: (item) => item.deviceId ? <Link href={`/devices/${item.deviceId}`}>{devices?.nodes.find(device => device.id === item.deviceId)?.name ?? t("Device")}</Link> : item.groupId ? groups?.data.find(group => group.id === item.groupId)?.name ?? t("Device groups") : t("All devices"),
             width: 150,
           },
           {
@@ -253,6 +284,7 @@ export default function AlertRulesPage() {
             cell: (item) => (
               <Toggle
                 checked={item.enabled}
+                disabled={!canAdminister(user)} ariaLabel={`${item.name}: ${t("common.enabled")}`}
                 onChange={() => handleToggleEnabled(item)}
               />
             ),
@@ -263,50 +295,29 @@ export default function AlertRulesPage() {
             header: t("common.actions"),
             cell: (item) => (
               <SpaceBetween direction="horizontal" size="xs">
-                <Button variant="inline-link" onClick={() => openEdit(item)}>{t("common.save")}</Button>
-                <Button variant="inline-link" onClick={() => setDeleteTarget(item)}>{t("common.delete")}</Button>
+                <Button variant="inline-link" disabled={!canAdminister(user)} onClick={() => openEdit(item)}>{t("common.edit")}</Button>
+                <Button variant="inline-link" disabled={!canAdminister(user)} onClick={() => setDeleteTarget(item)}>{t("common.delete")}</Button>
               </SpaceBetween>
             ),
             width: 150,
           },
         ]}
-        empty={
-          <Box textAlign="center" color="inherit" padding="l">
-            <SpaceBetween size="m">
-              <Box variant="strong">{t("page.alertRules")}</Box>
-              <Box variant="p" color="inherit">{t("alertRule.createRule")}</Box>
-              <Button variant="primary" onClick={openCreate}>{t("alertRule.createRule")}</Button>
-            </SpaceBetween>
-          </Box>
-        }
+        empty={<Box textAlign="center" padding="l"><SpaceBetween size="s"><Box variant="strong">{t("No alert rules")}</Box><Box>{t("Define a condition to detect problems in collected metrics.")}</Box></SpaceBetween></Box>}
       />
 
-      {/* Create / Edit Modal */}
-      <Modal
-        visible={modalVisible}
-        onDismiss={() => setModalVisible(false)}
-        header={editingRule ? t("alertRule.createRule") : t("alertRule.createRule")}
-        footer={
-          <Box float="right">
-            <SpaceBetween direction="horizontal" size="xs">
-              <Button variant="link" onClick={() => setModalVisible(false)}>{t("common.cancel")}</Button>
-              <Button variant="primary" loading={submitting} onClick={handleSubmit}>
-                {editingRule ? t("common.save") : t("common.create")}
-              </Button>
-            </SpaceBetween>
-          </Box>
-        }
-      >
-        <Form>
-          <SpaceBetween size="m">
-            <FormField label={t("alertRule.name")}>
+      <Modal visible={modalVisible} size="large" onDismiss={() => setModalVisible(false)} header={editingRule ? t("common.edit") : t("alertRule.createRule")}>
+        <SpaceBetween size="m">
+          {formError && <Alert type="error">{formError}</Alert>}
+          <Wizard activeStepIndex={step} onNavigate={({ detail }) => { if (detail.requestedStepIndex <= step || validateCore()) setStep(detail.requestedStepIndex); }} onCancel={() => setModalVisible(false)} onSubmit={handleSubmit} isLoadingNextStep={submitting} submitButtonText={t(editingRule ? "common.save" : "common.create")} steps={[
+            { title: t("Rule condition"), content: <SpaceBetween size="m">            <FormField label={t("alertRule.name")} errorText={fieldErrors.name}>
               <Input
                 value={form.name}
                 onChange={({ detail }) => setForm((f) => ({ ...f, name: detail.value }))}
               />
             </FormField>
-            <FormField label={t("alertRule.metric")}>
-              <Input
+            <FormField label={t("alertRule.metric")} errorText={fieldErrors.metric}>
+              <Autosuggest
+                options={["cpu", "memory", "bandwidth_in", "bandwidth_out", "latency", "ping"].map(value => ({ value, label: t(`metric.${value}`) }))}
                 value={form.metricName}
                 onChange={({ detail }) => setForm((f) => ({ ...f, metricName: detail.value }))}
               />
@@ -314,12 +325,12 @@ export default function AlertRulesPage() {
             <SpaceBetween direction="horizontal" size="m">
               <FormField label={t("alertRule.operator")}>
                 <Select
-                  selectedOption={form.operator}
+                  selectedOption={form.operator ? { ...form.operator, label: t(form.operator.label ?? "") } : null}
                   onChange={({ detail }) => setForm((f) => ({ ...f, operator: detail.selectedOption }))}
-                  options={OPERATOR_OPTIONS}
+                  options={OPERATOR_OPTIONS.map(option => ({ ...option, label: t(option.label ?? "") }))}
                 />
               </FormField>
-              <FormField label={t("alertRule.threshold")}>
+              <FormField label={t("alertRule.threshold")} errorText={fieldErrors.threshold}>
                 <Input
                   type="number"
                   value={form.threshold}
@@ -329,23 +340,24 @@ export default function AlertRulesPage() {
             </SpaceBetween>
             <FormField label={t("alertRule.severity")}>
               <Select
-                selectedOption={form.severity}
+                selectedOption={form.severity ? { ...form.severity, label: t(`severity.${form.severity.value}`) } : null}
                 onChange={({ detail }) => setForm((f) => ({ ...f, severity: detail.selectedOption }))}
                 options={SEVERITY_OPTIONS}
               />
             </FormField>
-            <FormField label={t("alertRule.device")}>
-              <Input
-                value={form.deviceId}
-                onChange={({ detail }) => setForm((f) => ({ ...f, deviceId: detail.value }))}
-              />
-            </FormField>
+</SpaceBetween> },
+            { title: t("Resource scope"), content: <SpaceBetween size="m">            <ResourceScopeFields description={t("Select one device and/or group. When both are selected, the device must belong to that group.")} deviceIds={form.deviceId ? [form.deviceId] : []} groupIds={form.groupId ? [form.groupId] : []} onChange={(devices, groups) => setForm({ ...form, deviceId: devices.at(-1) ?? "", groupId: groups.at(-1) ?? "" })} />
             <FormField label={t("alertRule.enabled")}>
               <Toggle
                 checked={form.enabled}
                 onChange={({ detail }) => setForm((f) => ({ ...f, enabled: detail.checked }))}
               />
             </FormField>
+</SpaceBetween> },
+            { title: t("Notification policy"), content: <SpaceBetween size="m">            <FormField label={t("Notification channels")}><Multiselect options={channelOptions} selectedOptions={form.channels.map(id => channelOptions.find(option => option.value === id) ?? { value: id, label: id })} onChange={({ detail }) => setForm({ ...form, channels: detail.selectedOptions.map(option => option.value ?? "") })} /></FormField>
+<ExpandableSection headerText={t("Advanced settings")}><SpaceBetween size="m">            <FormField label={t("Escalation delay (minutes)")}><Input type="number" value={form.escalationMinutes} onChange={({ detail }) => setForm({ ...form, escalationMinutes: detail.value })} /></FormField>
+            <FormField label={t("Escalation channels")}><Multiselect options={channelOptions} selectedOptions={form.escalationChannels.map(id => channelOptions.find(option => option.value === id) ?? { value: id, label: id })} onChange={({ detail }) => setForm({ ...form, escalationChannels: detail.selectedOptions.map(option => option.value ?? "") })} /></FormField>
+            <FormField label={t("Runbook URL")}><Input value={form.runbookUrl} onChange={({ detail }) => setForm({ ...form, runbookUrl: detail.value })} /></FormField>
             <SpaceBetween direction="horizontal" size="m">
               <FormField label={t("alertRule.flapThreshold")}>
                 <Input
@@ -354,7 +366,7 @@ export default function AlertRulesPage() {
                   onChange={({ detail }) => setForm((f) => ({ ...f, flapThreshold: detail.value }))}
                 />
               </FormField>
-              <FormField label={t("alertRule.flapWindow")}>
+              <FormField label={`${t("alertRule.flapWindow")} (minutes)`}>
                 <Input
                   type="number"
                   value={form.flapWindow}
@@ -362,8 +374,9 @@ export default function AlertRulesPage() {
                 />
               </FormField>
             </SpaceBetween>
-          </SpaceBetween>
-        </Form>
+</SpaceBetween></ExpandableSection></SpaceBetween> },
+          ]} />
+        </SpaceBetween>
       </Modal>
 
       {/* Delete Confirmation */}
@@ -374,7 +387,7 @@ export default function AlertRulesPage() {
         footer={
           <Box float="right">
             <SpaceBetween direction="horizontal" size="xs">
-              <Button variant="link" onClick={() => setDeleteTarget(null)}>{t("common.cancel")}</Button>
+              <Button variant="link" disabled={!canAdminister(user)} onClick={() => setDeleteTarget(null)}>{t("common.cancel")}</Button>
               <Button variant="primary" onClick={handleDelete}>{t("common.delete")}</Button>
             </SpaceBetween>
           </Box>
@@ -382,6 +395,6 @@ export default function AlertRulesPage() {
       >
         {deleteTarget?.name}
       </Modal>
-    </ContentLayout>
+    </>
   );
 }

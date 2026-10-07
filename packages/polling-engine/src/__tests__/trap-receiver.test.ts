@@ -7,7 +7,7 @@ vi.mock("net-snmp", () => ({
   default: {
     createReceiver: vi.fn((opts: any, cb: any) => {
       createReceiverCallback = cb;
-      return { close: mockReceiverClose };
+      return { close: mockReceiverClose, getAuthorizer: () => ({ addCommunity: vi.fn(), addUser: vi.fn() }) };
     }),
     PduType: { Trap: 164, TrapV2: 167, InformRequest: 168 },
   },
@@ -174,8 +174,8 @@ describe("TrapReceiver", () => {
     });
   });
 
-  describe("v3 inform parsing", () => {
-    it("detects InformRequest as v3", async () => {
+  describe("v2c inform parsing", () => {
+    it("does not mistake a v2c InformRequest for v3", async () => {
       const trap = new TrapReceiver();
       const events: any[] = [];
       trap.onTrap((e) => events.push(e));
@@ -190,7 +190,7 @@ describe("TrapReceiver", () => {
       });
       await vi.waitFor(() => expect(events).toHaveLength(1));
 
-      expect(events[0].version).toBe("v3");
+      expect(events[0].version).toBe("v2c");
       expect(events[0].oid).toBe("1.3.6.1.4.1.2636.4.1.1");
     });
   });

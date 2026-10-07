@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { PublicShell } from "@/components/common/public-shell";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Wizard from "@cloudscape-design/components/wizard";
 import Container from "@cloudscape-design/components/container";
@@ -10,9 +11,11 @@ import Input from "@cloudscape-design/components/input";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import Alert from "@cloudscape-design/components/alert";
 import Box from "@cloudscape-design/components/box";
+import Button from "@cloudscape-design/components/button";
+import Spinner from "@cloudscape-design/components/spinner";
 import { AuthProvider } from "@/lib/auth";
 import { I18nProvider, useI18n } from "@/lib/i18n";
-import { apiPost, setToken } from "@/lib/api";
+import { apiGet, apiPost, setToken } from "@/lib/api";
 import type { LoginResponse } from "@/lib/types";
 
 interface SetupFormState {
@@ -29,6 +32,14 @@ function SetupWizardContent() {
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null);
+  useEffect(() => {
+    let active = true;
+    apiGet<{ needsSetup: boolean }>("/api/setup/status")
+      .then(status => { if (active) setNeedsSetup(status.needsSetup); })
+      .catch(err => { if (active) setError(err instanceof Error ? err.message : t("Unable to check setup status.")); });
+    return () => { active = false; };
+  }, [t]);
   const [form, setForm] = useState<SetupFormState>({
     email: "",
     password: "",
@@ -60,8 +71,11 @@ function SetupWizardContent() {
     }
   }
 
+  if (needsSetup === null) return <PublicShell title={t("Set up NetPulse")}>{error ? <Alert type="error">{error}</Alert> : <Spinner size="large" />}</PublicShell>;
+  if (!needsSetup) return <PublicShell title={t("Set up NetPulse")}><Alert type="info" header={t("Initial setup is complete")} action={<Button href="/login">{t("auth.signIn")}</Button>}>{t("This site already has an administrator. Sign in to manage the site settings.")}</Alert></PublicShell>;
+
   return (
-    <div style={{ maxWidth: 800, margin: "40px auto", padding: "0 16px" }}>
+    <PublicShell wizard title={t("Set up NetPulse")}>
       {error && (
         <Box margin={{ bottom: "l" }}>
           <Alert type="error" dismissible onDismiss={() => setError("")}>
@@ -71,17 +85,21 @@ function SetupWizardContent() {
       )}
       <Wizard
         i18nStrings={{
-          stepNumberLabel: (stepNumber) => `Step ${stepNumber}`,
+          stepNumberLabel: (stepNumber) => `${t("Step")} ${stepNumber}`,
           collapsedStepsLabel: (stepNumber, stepsCount) =>
-            `Step ${stepNumber} of ${stepsCount}`,
+            `${t("Step")} ${stepNumber} / ${stepsCount}`,
           submitButton: t("setup.complete"),
           previousButton: t("common.previous"),
           nextButton: t("common.next"),
           cancelButton: t("common.cancel"),
-          optional: "optional",
+          optional: t("Optional"),
         }}
-        onNavigate={({ detail }) => setActiveStepIndex(detail.requestedStepIndex)}
+        onNavigate={({ detail }) => {
+          if (detail.requestedStepIndex > activeStepIndex && activeStepIndex === 0 && (!form.name.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) || form.password.length < 8)) { setError(t("Enter your name, a valid email address, and a password of at least 8 characters.")); return; }
+          setError(""); setActiveStepIndex(detail.requestedStepIndex);
+        }}
         onSubmit={handleSubmit}
+        onCancel={() => router.push("/login")}
         activeStepIndex={activeStepIndex}
         isLoadingNextStep={loading}
         steps={[
@@ -95,7 +113,7 @@ function SetupWizardContent() {
                     <Input
                       value={form.name}
                       onChange={({ detail }) => updateForm("name", detail.value)}
-                      placeholder="John Doe"
+                      placeholder={t("John Doe")}
                     />
                   </FormField>
                   <FormField label={t("auth.email")}>
@@ -103,7 +121,7 @@ function SetupWizardContent() {
                       type="email"
                       value={form.email}
                       onChange={({ detail }) => updateForm("email", detail.value)}
-                      placeholder="admin@netpulse.io"
+                      placeholder={t("admin@netpulse.io")}
                     />
                   </FormField>
                   <FormField label={t("auth.password")} description={t("setup.passwordMinLength")}>
@@ -127,17 +145,17 @@ function SetupWizardContent() {
                     <Input
                       value={form.siteName}
                       onChange={({ detail }) => updateForm("siteName", detail.value)}
-                      placeholder="My Network Operations Center"
+                      placeholder={t("My Network Operations Center")}
                     />
                   </FormField>
                   <FormField
                     label={t("site.logoUrl")}
-                    description="Optional. URL to your organization logo"
+                    description={t("Optional. URL to your organization logo")}
                   >
                     <Input
                       value={form.logoUrl}
                       onChange={({ detail }) => updateForm("logoUrl", detail.value)}
-                      placeholder="https://example.com/logo.png"
+                      placeholder={t("https://example.com/logo.png")}
                     />
                   </FormField>
                 </SpaceBetween>
@@ -178,7 +196,7 @@ function SetupWizardContent() {
           },
         ]}
       />
-    </div>
+    </PublicShell>
   );
 }
 

@@ -5,7 +5,7 @@
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 -- Convert metrics table to hypertable
-SELECT create_hypertable('metrics', 'timestamp', if_not_exists => TRUE);
+SELECT create_hypertable('metrics', 'timestamp', if_not_exists => TRUE, migrate_data => TRUE);
 
 -- Create compression policy (compress data older than 7 days)
 ALTER TABLE metrics SET (

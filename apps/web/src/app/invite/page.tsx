@@ -1,5 +1,7 @@
 "use client";
 
+import { PublicShell } from "@/components/common/public-shell";
+import { I18nProvider, useI18n } from "@/lib/i18n";
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Container from "@cloudscape-design/components/container";
@@ -17,6 +19,7 @@ import { apiGet, apiPost, setToken } from "@/lib/api";
 import type { Invitation, LoginResponse } from "@/lib/types";
 
 function InviteContent() {
+  const { t } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
@@ -33,7 +36,7 @@ function InviteContent() {
 
   useEffect(() => {
     if (!token) {
-      setFetchError("No invitation token provided");
+      setFetchError(t("No invitation token provided"));
       setLoadingInvite(false);
       return;
     }
@@ -43,14 +46,18 @@ function InviteContent() {
         if (data.email) setEmail(data.email);
       })
       .catch((err: unknown) => {
-        setFetchError(err instanceof Error ? err.message : "Invalid or expired invitation");
+        setFetchError(err instanceof Error ? err.message : t("Invalid or expired invitation"));
       })
       .finally(() => setLoadingInvite(false));
-  }, [token]);
+  }, [token, t]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    if (!name.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 8) {
+      setError(t("Enter your name, a valid email address, and a password of at least 8 characters."));
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await apiPost<LoginResponse>("/api/setup/invite/accept", {
@@ -62,40 +69,38 @@ function InviteContent() {
       setToken(result.token);
       router.push("/dashboard");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      setError(err instanceof Error ? err.message : t("Registration failed"));
       setSubmitting(false);
     }
   }
 
   if (loadingInvite) {
     return (
-      <div style={{ maxWidth: 400, margin: "80px auto", textAlign: "center" }}>
+      <PublicShell>
         <Spinner size="large" />
-      </div>
+      </PublicShell>
     );
   }
 
   if (fetchError) {
     return (
-      <div style={{ maxWidth: 400, margin: "80px auto", padding: "0 16px" }}>
+      <PublicShell>
         <Alert type="error">{fetchError}</Alert>
-      </div>
+      </PublicShell>
     );
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: "80px auto", padding: "0 16px" }}>
+    <PublicShell>
       <form onSubmit={handleSubmit}>
         <Form
           header={
-            <Header variant="h1" description="Complete your registration to join NetPulse">
-              Accept Invitation
-            </Header>
+            <Header variant="h1" description={t("Complete your registration to join NetPulse")}>
+              {t("Accept Invitation")}</Header>
           }
           actions={
             <Button variant="primary" loading={submitting} formAction="submit">
-              Create account
-            </Button>
+              {t("Create account")}</Button>
           }
         >
           <Container>
@@ -103,27 +108,27 @@ function InviteContent() {
               {error && <Alert type="error">{error}</Alert>}
               {invitation && (
                 <Box>
-                  <Box variant="awsui-key-label">Role</Box>
-                  <Box>{invitation.role}</Box>
+                  <Box variant="awsui-key-label">{t("Role")}</Box>
+                  <Box>{t(`role.${invitation.role}`)}</Box>
                 </Box>
               )}
-              <FormField label="Full name">
+              <FormField label={t("Full name")}>
                 <Input
                   value={name}
                   onChange={({ detail }) => setName(detail.value)}
-                  placeholder="John Doe"
+                  placeholder={t("John Doe")}
                 />
               </FormField>
-              <FormField label="Email">
+              <FormField label={t("Email")}>
                 <Input
                   type="email"
                   value={email}
                   onChange={({ detail }) => setEmail(detail.value)}
-                  placeholder="user@netpulse.io"
+                  placeholder={t("user@netpulse.io")}
                   disabled={!!invitation?.email}
                 />
               </FormField>
-              <FormField label="Password" description="Minimum 8 characters">
+              <FormField label={t("Password")} description={t("Minimum 8 characters")}>
                 <Input
                   type="password"
                   value={password}
@@ -134,16 +139,16 @@ function InviteContent() {
           </Container>
         </Form>
       </form>
-    </div>
+    </PublicShell>
   );
 }
 
 export default function InvitePage() {
   return (
-    <AuthProvider>
-      <Suspense fallback={<div style={{ maxWidth: 400, margin: "80px auto", textAlign: "center" }}><Spinner size="large" /></div>}>
+    <AuthProvider><I18nProvider>
+      <Suspense fallback={<PublicShell><Spinner size="large" /></PublicShell>}>
         <InviteContent />
       </Suspense>
-    </AuthProvider>
+    </I18nProvider></AuthProvider>
   );
 }

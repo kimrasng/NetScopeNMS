@@ -1,4 +1,5 @@
 "use client";
+import { formatDateTime } from "@/lib/date-format";
 
 import { useState, useCallback, useMemo } from "react";
 import ContentLayout from "@cloudscape-design/components/content-layout";
@@ -17,9 +18,12 @@ import Input from "@cloudscape-design/components/input";
 import Select from "@cloudscape-design/components/select";
 import type { SelectProps } from "@cloudscape-design/components/select";
 import Toggle from "@cloudscape-design/components/toggle";
-import Textarea from "@cloudscape-design/components/textarea";
+import { NotificationConfigFields } from "@/components/common/notification-config-fields";
+import { channelPayload, validateChannelConfig } from "@/lib/notification-config";
 import Pagination from "@cloudscape-design/components/pagination";
 import { useCollection } from "@cloudscape-design/collection-hooks";
+import { useAuth } from "@/lib/auth";
+import { canAdminister } from "@/lib/permissions";
 import { useApi } from "@/hooks/use-api";
 import { useNotifications } from "@/hooks/use-notifications";
 import { apiPost, apiPut, apiDelete } from "@/lib/api";
@@ -55,20 +59,21 @@ const NOTIFICATION_STATUS_MAP: Record<string, "success" | "error" | "pending" | 
 interface ChannelFormState {
   name: string;
   type: SelectProps.Option | null;
-  config: string;
+  config: Record<string, unknown>;
   enabled: boolean;
 }
 
 const EMPTY_CHANNEL_FORM: ChannelFormState = {
   name: "",
   type: { value: "email", label: "Email" },
-  config: "{}",
+  config: { smtp: { port: 587 } },
   enabled: true,
 };
 
 // ─── Channels Tab ─────────────────────────────────────
 
 function ChannelsTab() {
+  const { user } = useAuth();
   const { t } = useI18n();
   const { addNotification } = useNotifications();
   const { data, loading, refetch } = useApi<NotificationChannel[]>("/api/notifications/channels");
@@ -81,12 +86,15 @@ function ChannelsTab() {
     { value: "sms", label: t("channelType.sms") },
     { value: "pagerduty", label: t("channelType.pagerduty") },
     { value: "webhook", label: t("channelType.webhook") },
+    { value: "in_app", label: t("In-app notification") },
   ], [t]);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editingChannel, setEditingChannel] = useState<NotificationChannel | null>(null);
   const [form, setForm] = useState<ChannelFormState>(EMPTY_CHANNEL_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<NotificationChannel | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
 
@@ -101,6 +109,7 @@ function ChannelsTab() {
   const openCreate = useCallback(() => {
     setEditingChannel(null);
     setForm(EMPTY_CHANNEL_FORM);
+    setFieldErrors({}); setFormError("");
     setModalVisible(true);
   }, []);
 
@@ -109,21 +118,21 @@ function ChannelsTab() {
     setForm({
       name: ch.name,
       type: CHANNEL_TYPE_OPTIONS.find((o) => o.value === ch.type) ?? CHANNEL_TYPE_OPTIONS[0],
-      config: JSON.stringify(ch.config, null, 2),
+      config: ch.config,
       enabled: ch.enabled,
     });
+    setFieldErrors({}); setFormError("");
     setModalVisible(true);
-  }, []);
+  }, [CHANNEL_TYPE_OPTIONS]);
 
   const handleSubmit = useCallback(async () => {
-    if (!form.name || !form.type) return;
-    let parsedConfig: Record<string, unknown>;
-    try {
-      parsedConfig = JSON.parse(form.config);
-    } catch {
-      addNotification({ type: "error", content: "Invalid JSON in config field." });
-      return;
-    }
+    if (!form.type) return;
+    const stored = editingChannel && editingChannel.type === form.type.value ? editingChannel.config : undefined;
+    const errors = validateChannelConfig(form.type.value ?? "email", form.config, stored);
+    if (!form.name.trim()) errors.name = "Name is required.";
+    setFieldErrors(errors); setFormError("");
+    if (Object.keys(errors).length) return;
+    const parsedConfig = channelPayload(form.type.value ?? "email", form.config);
     setSubmitting(true);
     try {
       const body = {
@@ -141,12 +150,12 @@ function ChannelsTab() {
       }
       setModalVisible(false);
       refetch();
-    } catch {
-      addNotification({ type: "error", content: editingChannel ? t("notification.updated") : t("notification.created") });
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : t("Channel save failed"));
     } finally {
       setSubmitting(false);
     }
-  }, [form, editingChannel, addNotification, refetch]);
+  }, [form, editingChannel, addNotification, refetch, t]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -155,10 +164,10 @@ function ChannelsTab() {
       addNotification({ type: "success", content: t("notification.deleted") });
       setDeleteTarget(null);
       refetch();
-    } catch {
-      addNotification({ type: "error", content: t("notification.deleted") });
+    } catch (error) {
+      addNotification({ type: "error", content: error instanceof Error ? error.message : "Channel deletion failed" });
     }
-  }, [deleteTarget, addNotification, refetch]);
+  }, [deleteTarget, addNotification, refetch, t]);
 
   const handleTest = useCallback(async (channelId: string) => {
     setTestingId(channelId);
@@ -170,7 +179,7 @@ function ChannelsTab() {
     } finally {
       setTestingId(null);
     }
-  }, [addNotification]);
+  }, [addNotification, t]);
 
   return (
     <>
@@ -179,13 +188,13 @@ function ChannelsTab() {
         items={items}
         loading={loading}
         loadingText={t("notification.channels")}
-        variant="full-page"
+        variant="container"
         stickyHeader
         header={
           <Header
             counter={`(${channels.length})`}
             actions={
-              <Button variant="primary" onClick={openCreate}>{t("notification.addChannel")}</Button>
+              <Button variant="primary" disabled={!canAdminister(user)} onClick={openCreate}>{t("notification.addChannel")}</Button>
             }
           >
             {t("notification.channels")}
@@ -204,7 +213,7 @@ function ChannelsTab() {
             header: t("notification.channelType"),
             cell: (item) => (
               <Badge color={CHANNEL_TYPE_COLORS[item.type]}>
-                {item.type.charAt(0).toUpperCase() + item.type.slice(1)}
+                {t(`channelType.${item.type}`)}
               </Badge>
             ),
             sortingField: "type",
@@ -215,7 +224,7 @@ function ChannelsTab() {
             header: t("common.enabled"),
             cell: (item) => (
               <StatusIndicator type={item.enabled ? "success" : "stopped"}>
-                {item.enabled ? t("common.enabled") : t("common.enabled")}
+                {item.enabled ? t("common.enabled") : t("common.disabled")}
               </StatusIndicator>
             ),
             width: 120,
@@ -223,7 +232,7 @@ function ChannelsTab() {
           {
             id: "createdAt",
             header: t("common.createdAt"),
-            cell: (item) => new Date(item.createdAt).toLocaleString(),
+            cell: (item) => formatDateTime(new Date(item.createdAt)),
             sortingField: "createdAt",
             width: 180,
           },
@@ -235,26 +244,18 @@ function ChannelsTab() {
                 <Button
                   variant="inline-link"
                   loading={testingId === item.id}
-                  onClick={() => handleTest(item.id)}
+                  disabled={!canAdminister(user)} onClick={() => handleTest(item.id)}
                 >
                   {t("notification.testChannel")}
                 </Button>
-                <Button variant="inline-link" onClick={() => openEdit(item)}>{t("notification.editChannel")}</Button>
-                <Button variant="inline-link" onClick={() => setDeleteTarget(item)}>{t("common.delete")}</Button>
+                <Button variant="inline-link" disabled={!canAdminister(user)} onClick={() => openEdit(item)}>{t("notification.editChannel")}</Button>
+                <Button variant="inline-link" disabled={!canAdminister(user)} onClick={() => setDeleteTarget(item)}>{t("common.delete")}</Button>
               </SpaceBetween>
             ),
             width: 200,
           },
         ]}
-        empty={
-          <Box textAlign="center" color="inherit" padding="l">
-            <SpaceBetween size="m">
-              <Box variant="strong">{t("notification.channels")}</Box>
-              <Box variant="p" color="inherit">{t("notification.addChannel")}</Box>
-              <Button variant="primary" onClick={openCreate}>{t("notification.addChannel")}</Button>
-            </SpaceBetween>
-          </Box>
-        }
+        empty={<Box textAlign="center" padding="l"><SpaceBetween size="s"><Box variant="strong">{t("No notification channels")}</Box><Box>{t("Configure a channel to deliver incident notifications.")}</Box></SpaceBetween></Box>}
       />
 
       <Modal
@@ -272,9 +273,9 @@ function ChannelsTab() {
           </Box>
         }
       >
-        <Form>
+        <Form errorText={formError}>
           <SpaceBetween size="m">
-            <FormField label={t("notification.channelName")}>
+            <FormField label={t("notification.channelName")} errorText={fieldErrors.name ? t(fieldErrors.name) : undefined}>
               <Input
                 value={form.name}
                 onChange={({ detail }) => setForm((f) => ({ ...f, name: detail.value }))}
@@ -282,18 +283,12 @@ function ChannelsTab() {
             </FormField>
             <FormField label={t("notification.selectType")}>
               <Select
-                selectedOption={form.type}
-                onChange={({ detail }) => setForm((f) => ({ ...f, type: detail.selectedOption }))}
+                selectedOption={form.type ? { ...form.type, label: t(`channelType.${form.type.value}`) } : null}
+                onChange={({ detail }) => setForm((f) => ({ ...f, type: detail.selectedOption, config: detail.selectedOption.value === "email" ? { smtp: { port: 587 } } : {} }))}
                 options={CHANNEL_TYPE_OPTIONS}
               />
             </FormField>
-            <FormField label={t("notification.config")}>
-              <Textarea
-                value={form.config}
-                onChange={({ detail }) => setForm((f) => ({ ...f, config: detail.value }))}
-                rows={6}
-              />
-            </FormField>
+            <NotificationConfigFields key={`${editingChannel?.id ?? "new"}-${form.type?.value}`} type={form.type?.value ?? "email"} config={form.config} stored={editingChannel?.type === form.type?.value ? editingChannel?.config : undefined} errors={fieldErrors} onChange={config => setForm(f => ({ ...f, config }))} />
             <FormField label={t("common.enabled")}>
               <Toggle
                 checked={form.enabled}
@@ -311,7 +306,7 @@ function ChannelsTab() {
         footer={
           <Box float="right">
             <SpaceBetween direction="horizontal" size="xs">
-              <Button variant="link" onClick={() => setDeleteTarget(null)}>{t("common.cancel")}</Button>
+              <Button variant="link" disabled={!canAdminister(user)} onClick={() => setDeleteTarget(null)}>{t("common.cancel")}</Button>
               <Button variant="primary" onClick={handleDelete}>{t("common.delete")}</Button>
             </SpaceBetween>
           </Box>
@@ -348,7 +343,7 @@ function HistoryTab() {
       items={items}
       loading={loading}
       loadingText={t("notification.history")}
-      variant="full-page"
+      variant="container"
       stickyHeader
       header={
         <Header counter={pagination ? `(${pagination.total})` : undefined}>
@@ -361,11 +356,6 @@ function HistoryTab() {
             currentPageIndex={page}
             pagesCount={pagination.totalPages}
             onChange={({ detail }) => setPage(detail.currentPageIndex)}
-            ariaLabels={{
-              nextPageLabel: "Next page",
-              previousPageLabel: "Previous page",
-              pageLabel: (pageNumber) => `Page ${pageNumber}`,
-            }}
           />
         ) : undefined
       }
@@ -401,7 +391,7 @@ function HistoryTab() {
         {
           id: "sentAt",
           header: t("notification.sentAt"),
-          cell: (item) => (item.sentAt ? new Date(item.sentAt).toLocaleString() : "—"),
+          cell: (item) => (item.sentAt ? formatDateTime(new Date(item.sentAt)) : "—"),
           sortingField: "sentAt",
           width: 180,
         },
@@ -413,7 +403,7 @@ function HistoryTab() {
       ]}
       empty={
         <Box textAlign="center" color="inherit" padding="l">
-          <Box variant="strong">{t("notification.history")}</Box>
+          <Box variant="strong">{t("No delivery history")}</Box>
         </Box>
       }
     />

@@ -1,25 +1,30 @@
+import { bodySchema } from "../services/contracts.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { eq, sql, and, inArray, or } from "drizzle-orm";
-import { devices, interfaces } from "@netpulse/shared";
+import { eq, sql, and } from "drizzle-orm";
+import { devices, interfaces, snmpV3Schema } from "@netpulse/shared";
 import { authenticate, requireRole } from "../middleware/auth.js";
+import { deviceScope } from "../services/access.js";
+import { encryptSshKey } from "../services/ssh.js";
 import { logAudit } from "./audit-logs.js";
 
 const createDeviceSchema = z.object({
   name: z.string().min(1).max(255),
-  ip: z.string().min(1).max(45),
+  ip: z.string().ip(),
   type: z.enum(["router", "switch", "server", "firewall", "access_point", "load_balancer", "storage", "other"]).default("other"),
   snmpVersion: z.enum(["v1", "v2c", "v3"]).optional(),
   snmpCommunity: z.string().optional(),
-  snmpPort: z.number().int().default(161),
-  snmpV3Config: z.record(z.unknown()).optional(),
-  sshHost: z.string().optional(),
-  sshPort: z.number().int().default(22),
-  sshUsername: z.string().optional(),
+  snmpPort: z.number().int().min(1).max(65535).default(161),
+  snmpV3Config: snmpV3Schema.nullable().optional(),
+  sshHost: z.string().max(255).nullable().optional(),
+  sshPort: z.number().int().min(1).max(65535).default(22),
+  sshUsername: z.string().max(255).nullable().optional(),
+  sshPrivateKey: z.string().min(32).max(20000).optional(),
+  sshHostFingerprint: z.string().regex(/^(?:[a-fA-F0-9]{64}|SHA256:[A-Za-z0-9+/]{43}=?)$/, "Use the server SHA256 fingerprint").nullable().optional(),
   location: z.string().optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
-  groupId: z.string().uuid().optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
+  groupId: z.string().uuid().nullable().optional(),
   tags: z.array(z.string()).default([]),
   pollingInterval: z.number().int().min(30).default(60),
   pollingEnabled: z.boolean().default(true),
@@ -44,28 +49,11 @@ export async function deviceRoutes(app: FastifyInstance) {
         sql`(${devices.name} ILIKE ${"%" + query.search + "%"} OR ${devices.ip} ILIKE ${"%" + query.search + "%"})`
       );
     }
-    if (query.type) conditions.push(eq(devices.type, query.type as any));
-    if (query.status) conditions.push(eq(devices.status, query.status as any));
+    if (query.type) conditions.push(eq(devices.type, createDeviceSchema.shape.type.parse(query.type)));
+    if (query.status) conditions.push(eq(devices.status, z.enum(["up", "down", "warning", "unknown", "maintenance"]).parse(query.status)));
     if (query.groupId) conditions.push(eq(devices.groupId, query.groupId));
 
-    // Scope-based access control for restricted users
-    if (request.userScope === "restricted") {
-      const deviceIdFilter = request.userAllowedDeviceIds || [];
-      const groupIdFilter = request.userAllowedGroupIds || [];
-
-      if (deviceIdFilter.length === 0 && groupIdFilter.length === 0) {
-        return { data: [], pagination: { page, limit, total: 0, totalPages: 0 } };
-      }
-
-      const scopeConditions = [];
-      if (deviceIdFilter.length > 0) {
-        scopeConditions.push(inArray(devices.id, deviceIdFilter));
-      }
-      if (groupIdFilter.length > 0) {
-        scopeConditions.push(inArray(devices.groupId, groupIdFilter));
-      }
-      conditions.push(scopeConditions.length > 1 ? or(...scopeConditions)! : scopeConditions[0]);
-    }
+    conditions.push(deviceScope(request, devices.id));
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -97,23 +85,33 @@ export async function deviceRoutes(app: FastifyInstance) {
   });
 
   // Create device
-  app.post("/", { preHandler: [requireRole("super_admin", "admin", "operator")] }, async (request, reply) => {
+  app.post("/", { schema: bodySchema(createDeviceSchema), preHandler: [requireRole("super_admin", "admin", "operator")] }, async (request, reply) => {
     const body = createDeviceSchema.parse(request.body);
-    const [device] = await app.db.insert(devices).values(body).returning();
-    await logAudit(app.db, { userId: request.userId, action: "device.create", resource: "device", resourceId: device.id, details: body, ipAddress: request.ip });
+    if (body.snmpVersion === "v3" && !body.snmpV3Config) throw new z.ZodError([{ code: "custom", path: ["snmpV3Config"], message: "SNMPv3 credentials are required" }]);
+    const { sshPrivateKey, ...values } = body;
+    const [device] = await app.db.insert(devices).values({ ...values, ...(sshPrivateKey ? { sshKeyEncrypted: encryptSshKey(sshPrivateKey) } : {}) }).returning();
+    await logAudit(app.db, { userId: request.userId, action: "device.create", resource: "device", resourceId: device.id, details: body, ipAddress: request.ip }, request);
+    if (app.pollingEngine) await app.pollingEngine.syncDevice(device.id);
     return reply.code(201).send(device);
   });
 
   // Update device
-  app.put("/:id", { preHandler: [requireRole("super_admin", "admin", "operator")] }, async (request, reply) => {
+  app.put("/:id", { schema: bodySchema(updateDeviceSchema), preHandler: [requireRole("super_admin", "admin", "operator")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = updateDeviceSchema.parse(request.body);
+    const existing = await app.db.query.devices.findFirst({ where: eq(devices.id, id) });
+    if (!existing) return reply.code(404).send({ error: "Device not found" });
+    const input = z.record(z.unknown()).parse(request.body);
+    if (input.snmpV3Config && typeof input.snmpV3Config === "object") input.snmpV3Config = { ...existing.snmpV3Config, ...z.record(z.unknown()).parse(input.snmpV3Config) };
+    const body = updateDeviceSchema.parse(input);
+    if ((body.snmpVersion ?? existing.snmpVersion) === "v3" && !(body.snmpV3Config ?? existing.snmpV3Config)) throw new z.ZodError([{ code: "custom", path: ["snmpV3Config"], message: "SNMPv3 credentials are required" }]);
+    const { sshPrivateKey, ...values } = body;
     const [device] = await app.db.update(devices)
-      .set({ ...body, updatedAt: new Date() })
+      .set({ ...values, ...(sshPrivateKey ? { sshKeyEncrypted: encryptSshKey(sshPrivateKey) } : {}), updatedAt: new Date() })
       .where(eq(devices.id, id))
       .returning();
     if (!device) return reply.code(404).send({ error: "Device not found" });
-    await logAudit(app.db, { userId: request.userId, action: "device.update", resource: "device", resourceId: id, details: body, ipAddress: request.ip });
+    await logAudit(app.db, { userId: request.userId, action: "device.update", resource: "device", resourceId: id, details: body, ipAddress: request.ip }, request);
+    if (app.pollingEngine) await app.pollingEngine.syncDevice(id);
     return device;
   });
 
@@ -122,7 +120,8 @@ export async function deviceRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const [device] = await app.db.delete(devices).where(eq(devices.id, id)).returning();
     if (!device) return reply.code(404).send({ error: "Device not found" });
-    await logAudit(app.db, { userId: request.userId, action: "device.delete", resource: "device", resourceId: id, ipAddress: request.ip });
+    await logAudit(app.db, { userId: request.userId, action: "device.delete", resource: "device", resourceId: id, ipAddress: request.ip }, request);
+    if (app.pollingEngine) await app.pollingEngine.syncDevice(id);
     return { message: "Device deleted" };
   });
 

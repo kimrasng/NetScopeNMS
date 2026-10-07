@@ -40,14 +40,21 @@ services:
     restart: unless-stopped
     ports:
       - "4000:4000"
+      - "162:1162/udp"
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://netpulse:netpulse@postgres:5432/netpulse
       REDIS_URL: redis://redis:6379
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-netpulse-secret-change-in-production}
-      CORS_ORIGIN: http://localhost:3000
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in .env}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
       API_PORT: "4000"
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SNMP_TRAP_ENABLED: ${SNMP_TRAP_ENABLED:-true}
+      SNMP_TRAP_PORT: "1162"
+      SNMP_TRAP_COMMUNITY: ${SNMP_TRAP_COMMUNITY:-public}
+      SNMP_TRAP_USERS: ${SNMP_TRAP_USERS:-[]}
+      DISCOVERY_ENABLED: ${DISCOVERY_ENABLED:-true}
+      DISCOVERY_INTERVAL: ${DISCOVERY_INTERVAL:-3600}
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,12 +69,12 @@ services:
       context: .
       dockerfile: Dockerfile
       target: web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
     container_name: netpulse-web
     restart: unless-stopped
     ports:
       - "3000:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:4000
     depends_on:
       - api
 

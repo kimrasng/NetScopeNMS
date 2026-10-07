@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 export function TopNav() {
   const { user, logout } = useAuth();
   const { t } = useI18n();
-  const { siteName } = useSite();
+  const { siteName, logoUrl } = useSite();
   const router = useRouter();
 
   return (
@@ -17,6 +17,7 @@ export function TopNav() {
       identity={{
         href: "/dashboard",
         title: siteName,
+        logo: logoUrl ? { src: logoUrl, alt: siteName } : undefined,
         onFollow: (e) => {
           e.preventDefault();
           router.push("/dashboard");
@@ -25,10 +26,9 @@ export function TopNav() {
       utilities={[
         {
           type: "button",
-          iconName: "notification",
-          title: t("topnav.notifications"),
-          ariaLabel: t("topnav.notifications"),
-          badge: false,
+          text: t("Channel settings"),
+          title: t("Channel settings"),
+          ariaLabel: t("Channel settings"),
           onClick: () => router.push("/notifications"),
         },
         {
@@ -39,7 +39,7 @@ export function TopNav() {
           items: [
             { id: "profile", text: t("topnav.profile") },
             { id: "preferences", text: t("nav.preferences") },
-            { id: "settings", text: t("topnav.settings") },
+            ...(user?.scope === "all" && (user.role === "admin" || user.role === "super_admin") ? [{ id: "settings", text: t("topnav.settings") }] : []),
             { id: "signout", text: t("topnav.signout") },
           ],
           onItemClick: ({ detail }) => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { PublicShell } from "@/components/common/public-shell";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@cloudscape-design/components/button";
@@ -10,6 +11,7 @@ import Header from "@cloudscape-design/components/header";
 import Input from "@cloudscape-design/components/input";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import Alert from "@cloudscape-design/components/alert";
+import Spinner from "@cloudscape-design/components/spinner";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { I18nProvider, useI18n } from "@/lib/i18n";
 import { apiGet } from "@/lib/api";
@@ -26,6 +28,10 @@ function LoginForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !password) {
+      setError(t("Enter your email address and password."));
+      return;
+    }
     setLoading(true);
     try {
       await login(email, password);
@@ -38,12 +44,12 @@ function LoginForm() {
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: "80px auto", padding: "0 16px" }}>
+    <PublicShell>
       <form onSubmit={handleSubmit}>
         <Form
           header={
-            <Header variant="h1" description={t("auth.subtitle")}>
-              NetPulse
+            <Header variant="h1" description={t("Sign in to your network operations console.")}>
+              {t("auth.signIn")}
             </Header>
           }
           actions={
@@ -60,7 +66,7 @@ function LoginForm() {
                   type="email"
                   value={email}
                   onChange={({ detail }) => setEmail(detail.value)}
-                  placeholder="admin@netpulse.io"
+                  placeholder={t("admin@netpulse.io")}
                 />
               </FormField>
               <FormField label={t("auth.password")}>
@@ -74,7 +80,7 @@ function LoginForm() {
           </Container>
         </Form>
       </form>
-    </div>
+    </PublicShell>
   );
 }
 
@@ -91,7 +97,7 @@ function LoginPageInner() {
       .catch(() => setChecking(false));
   }, [router]);
 
-  if (checking) return null;
+  if (checking) return <PublicShell><Spinner size="large" /></PublicShell>;
   return <LoginForm />;
 }
 

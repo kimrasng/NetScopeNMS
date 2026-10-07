@@ -1,15 +1,19 @@
+import { bodySchema } from "../services/contracts.js";
 import type { FastifyInstance } from "fastify";
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { eq, sql, desc } from "drizzle-orm";
-import { configSnapshots } from "@netpulse/shared";
+import { eq, sql, desc, and } from "drizzle-orm";
+import { devices, configSnapshots } from "@netpulse/shared";
 import { authenticate, requireRole } from "../middleware/auth.js";
+import { deviceScope } from "../services/access.js";
+import { captureSshConfiguration } from "../services/ssh.js";
 import { logAudit } from "./audit-logs.js";
 
 const createSnapshotSchema = z.object({
   deviceId: z.string().uuid(),
   configText: z.string().min(1),
 });
+const captureSnapshotSchema = z.object({ deviceId: z.string().uuid(), command: z.string().min(1).max(500).default("show running-config") });
 
 export async function configSnapshotRoutes(app: FastifyInstance) {
   app.get("/", { preHandler: [authenticate] }, async (request) => {
@@ -18,7 +22,7 @@ export async function configSnapshotRoutes(app: FastifyInstance) {
     const limit = Math.min(parseInt(query.limit || "50", 10), 200);
     const offset = (page - 1) * limit;
 
-    const where = query.deviceId ? eq(configSnapshots.deviceId, query.deviceId) : undefined;
+    const where = and(deviceScope(request, configSnapshots.deviceId), query.deviceId ? eq(configSnapshots.deviceId, query.deviceId) : undefined);
 
     const [items, countResult] = await Promise.all([
       app.db.select().from(configSnapshots).where(where).limit(limit).offset(offset).orderBy(desc(configSnapshots.capturedAt)),
@@ -43,7 +47,7 @@ export async function configSnapshotRoutes(app: FastifyInstance) {
     return snapshot;
   });
 
-  app.post("/", { preHandler: [requireRole("super_admin", "admin", "operator")] }, async (request, reply) => {
+  app.post("/", { schema: bodySchema(createSnapshotSchema), preHandler: [requireRole("super_admin", "admin", "operator")] }, async (request, reply) => {
     const body = createSnapshotSchema.parse(request.body);
     const hash = createHash("sha256").update(body.configText).digest("hex");
 
@@ -61,7 +65,18 @@ export async function configSnapshotRoutes(app: FastifyInstance) {
       .values({ deviceId: body.deviceId, configText: body.configText, hash, diff })
       .returning();
 
-    await logAudit(app.db, { userId: request.userId, action: "config-snapshot.create", resource: "config-snapshot", resourceId: snapshot.id, details: { deviceId: body.deviceId }, ipAddress: request.ip });
+    await logAudit(app.db, { userId: request.userId, action: "config-snapshot.create", resource: "config-snapshot", resourceId: snapshot.id, details: { deviceId: body.deviceId }, ipAddress: request.ip }, request);
+    return reply.code(201).send(snapshot);
+  });
+
+  app.post("/capture", { schema: bodySchema(captureSnapshotSchema), preHandler: [requireRole("super_admin", "admin", "operator")] }, async (request, reply) => {
+    const body = captureSnapshotSchema.parse(request.body);
+    const device = await app.db.query.devices.findFirst({ where: eq(devices.id, body.deviceId) });
+    if (!device) return reply.code(404).send({ error: "Device not found" });
+    const configText = await captureSshConfiguration(device, body.command);
+    const [previous] = await app.db.select().from(configSnapshots).where(eq(configSnapshots.deviceId, device.id)).orderBy(desc(configSnapshots.capturedAt)).limit(1);
+    const [snapshot] = await app.db.insert(configSnapshots).values({ deviceId: device.id, configText, hash: createHash("sha256").update(configText).digest("hex"), diff: previous ? computeDiff(previous.configText, configText) : "Initial snapshot" }).returning();
+    await logAudit(app.db, { userId: request.userId, action: "config-snapshot.capture", resource: "config-snapshot", resourceId: snapshot.id, details: { deviceId: device.id }, ipAddress: request.ip }, request);
     return reply.code(201).send(snapshot);
   });
 
@@ -90,7 +105,7 @@ export async function configSnapshotRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const [snapshot] = await app.db.delete(configSnapshots).where(eq(configSnapshots.id, id)).returning();
     if (!snapshot) return reply.code(404).send({ error: "Config snapshot not found" });
-    await logAudit(app.db, { userId: request.userId, action: "config-snapshot.delete", resource: "config-snapshot", resourceId: id, ipAddress: request.ip });
+    await logAudit(app.db, { userId: request.userId, action: "config-snapshot.delete", resource: "config-snapshot", resourceId: id, ipAddress: request.ip }, request);
     return { message: "Config snapshot deleted" };
   });
 }

@@ -14,9 +14,12 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   const [site, setSite] = useState<SiteState>({ siteName: "NetPulse", logoUrl: "" });
 
   useEffect(() => {
-    apiGet<{ siteName: string; logoUrl: string }>("/api/setup/site")
+    const refresh = () => { void apiGet<{ siteName: string; logoUrl: string }>("/api/setup/site")
       .then((data) => setSite({ siteName: data.siteName || "NetPulse", logoUrl: data.logoUrl || "" }))
-      .catch(() => {});
+      .catch(() => {}); };
+    refresh();
+    window.addEventListener("netpulse:site-updated", refresh);
+    return () => window.removeEventListener("netpulse:site-updated", refresh);
   }, []);
 
   return <SiteContext.Provider value={site}>{children}</SiteContext.Provider>;

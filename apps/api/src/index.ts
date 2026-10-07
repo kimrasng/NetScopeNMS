@@ -8,8 +8,19 @@ import fastifyCookie from "@fastify/cookie";
 import fastifyJwt from "@fastify/jwt";
 import { createVerifier } from "fast-jwt";
 import { Server } from "socket.io";
-import { createDb } from "@netpulse/shared";
-import { startPollingEngine } from "@netpulse/polling-engine";
+import { createDb, devices, incidents, metrics } from "@netpulse/shared";
+import { startPollingEngine, TrapReceiver, DiscoveryEngine } from "@netpulse/polling-engine";
+import { loadPrincipal } from "./services/access.js";
+import { z } from "zod";
+import { registerRequestPolicy } from "./services/request-policy.js";
+import { eq, and, ne, desc } from "drizzle-orm";
+import { emitDeviceEvent } from "./services/realtime.js";
+import { startThresholdEngine } from "./services/threshold-engine.js";
+import { startDeliveryEngine } from "./services/delivery.js";
+import { startTrapEngine } from "./services/traps.js";
+import { isDeviceInMaintenance } from "./services/maintenance.js";
+import { deviceGroupRoutes } from "./routes/device-groups.js";
+import { discoveryRoutes } from "./routes/discovery.js";
 import { config } from "./config.js";
 import { deviceRoutes } from "./routes/devices.js";
 import { authRoutes } from "./routes/auth.js";
@@ -33,6 +44,7 @@ import { topologyRoutes } from "./routes/topology.js";
  */
 async function main() {
   const app = Fastify({
+    ajv: { customOptions: { useDefaults: false, coerceTypes: false, removeAdditional: false } },
     logger: {
       level: config.logLevel,
       transport: config.nodeEnv === "development"
@@ -101,6 +113,8 @@ async function main() {
     routePrefix: "/docs",
   });
 
+  registerRequestPolicy(app);
+
   // ─── Routes ──────────────────────────────────────
   await app.register(authRoutes, { prefix: "/api/auth" });
   await app.register(deviceRoutes, { prefix: "/api/devices" });
@@ -118,9 +132,15 @@ async function main() {
   await app.register(apiKeyRoutes, { prefix: "/api/api-keys" });
   await app.register(dashboardCrudRoutes, { prefix: "/api/dashboards" });
   await app.register(topologyRoutes, { prefix: "/api/topology" });
+  await app.register(deviceGroupRoutes, { prefix: "/api/device-groups" });
+  await app.register(discoveryRoutes, { prefix: "/api/discovery" });
 
   // ─── Health Check ────────────────────────────────
-  app.get("/api/health", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
+  const health = { polling: false, thresholds: false, delivery: false, traps: !config.trapEnabled, discovery: !config.discoveryEnabled };
+  app.get("/api/health", async (_request, reply) => {
+    const healthy = Object.values(health).every(Boolean);
+    return reply.code(healthy ? 200 : 503).send({ status: healthy ? "ok" : "degraded", services: health, timestamp: new Date().toISOString() });
+  });
 
   // ─── Socket.IO ───────────────────────────────────
   const io = new Server(app.server, {
@@ -131,16 +151,16 @@ async function main() {
 
   const verifyJwt = createVerifier({ key: config.jwtSecret, algorithms: ["HS256"] });
 
-  io.use((socket, next) => {
-    const token = socket.handshake.auth?.token;
-    if (!token) return next(new Error("Authentication required"));
+  io.use(async (socket, next) => {
     try {
-      const decoded = verifyJwt(token);
-      socket.data.user = decoded;
+      const token = z.string().parse(socket.handshake.auth?.token);
+      const decoded = z.object({ id: z.string().uuid(), authVersion: z.number().default(0) }).parse(verifyJwt(token));
+      const { user } = await loadPrincipal(db, decoded.id);
+      if (decoded.authVersion !== user.authVersion) throw new Error("Session revoked");
+      socket.data.userId = user.id;
+      socket.data.authVersion = user.authVersion;
       next();
-    } catch {
-      next(new Error("Invalid or expired token"));
-    }
+    } catch { next(new Error("Invalid or unavailable account")); }
   });
 
   io.on("connection", (socket) => {
@@ -150,36 +170,79 @@ async function main() {
     });
   });
 
-  // ─── Graceful Shutdown ───────────────────────────
+  const polling = startPollingEngine({
+    redisUrl: config.redisUrl, databaseUrl: config.databaseUrl, concurrency: 10,
+    isInMaintenance: device => isDeviceInMaintenance(db, device),
+    onResult: async result => {
+      const device = await db.query.devices.findFirst({ where: eq(devices.id, result.deviceId) });
+      if (device) await emitDeviceEvent(app, "device:updated", device.id, { id: device.id, status: device.status, lastPolledAt: device.lastPolledAt });
+      await emitDeviceEvent(app, "metric:updated", result.deviceId, { deviceId: result.deviceId });
+    },
+  });
+  app.decorate("pollingEngine", polling);
+  const thresholds = startThresholdEngine({ redisUrl: config.redisUrl, databaseUrl: config.databaseUrl,
+    onIncident: async (deviceId, incidentId) => {
+      const incident = await db.query.incidents.findFirst({ where: eq(incidents.id, incidentId) });
+      if (incident) await emitDeviceEvent(app, "incident:updated", deviceId, incident);
+      const device = await db.query.devices.findFirst({ where: eq(devices.id, deviceId) });
+      if (device) {
+        const active = await db.query.incidents.findFirst({ where: and(eq(incidents.deviceId, deviceId), ne(incidents.status, "resolved")) });
+        const ping = await db.query.metrics.findFirst({ where: and(eq(metrics.deviceId, deviceId), eq(metrics.metricName, "ping")), orderBy: desc(metrics.timestamp) });
+        const status = await isDeviceInMaintenance(db, device) ? "maintenance" : ping ? ping.value === 1 ? active ? "warning" : "up" : "down" : "unknown";
+        await db.update(devices).set({ status, updatedAt: new Date() }).where(eq(devices.id, deviceId));
+        await emitDeviceEvent(app, "device:updated", deviceId, { id: deviceId, status });
+      }
+    },
+  });
+  const delivery = startDeliveryEngine(app, config.redisUrl);
+  const traps = startTrapEngine(app, config.redisUrl);
+  const trapReceiver = new TrapReceiver({ port: config.trapPort, community: config.trapCommunity, users: config.trapUsers, databaseUrl: config.databaseUrl, redisUrl: config.redisUrl });
+  trapReceiver.on("error", error => { health.traps = false; app.log.error({ err: error }, "Trap receiver failed"); });
+  if (config.trapEnabled) { trapReceiver.start(); health.traps = true; }
+  let discovery: DiscoveryEngine | undefined;
+  if (config.discoveryEnabled) {
+    discovery = new DiscoveryEngine({ redisUrl: config.redisUrl, databaseUrl: config.databaseUrl, discoveryInterval: config.discoveryInterval,
+      onDiscovered: async ids => {
+        for (const id of ids) {
+          await polling.syncDevice(id);
+          await emitDeviceEvent(app, "topology:updated", id, { deviceId: id });
+        }
+      },
+    });
+    const started = discovery.start();
+    app.decorate("discoveryEngine", started);
+    await started.worker.waitUntilReady();
+    started.worker.on("error", error => { health.discovery = false; app.log.error({ err: error }, "Discovery worker failed"); });
+    health.discovery = true;
+  }
+  for (const [name, worker] of [["polling", polling.worker], ["thresholds", thresholds.worker], ["delivery", delivery.worker]] as const) {
+    await worker.waitUntilReady();
+    health[name] = true;
+    worker.on("error", error => { health[name] = false; app.log.error({ err: error, service: name }, "Worker failed"); });
+  }
+  traps.worker.on("error", error => { health.traps = false; app.log.error({ err: error }, "Trap worker failed"); });
+  await traps.worker.waitUntilReady();
+  await polling.schedulePolling();
+
+  let stopping = false;
   const shutdown = async () => {
-    app.log.info("Shutting down gracefully...");
-    io.close();
+    if (stopping) return;
+    stopping = true;
+    await trapReceiver.stop();
+    await new Promise<void>(resolve => io.close(() => resolve()));
     await app.close();
+    await thresholds.shutdown();
+    await polling.shutdown();
+    await traps.shutdown();
+    if (discovery) await discovery.shutdown();
+    await delivery.shutdown();
     await client.end();
     process.exit(0);
   };
-  process.on("SIGTERM", shutdown);
-  process.on("SIGINT", shutdown);
-
-  // ─── Start ───────────────────────────────────────
+  process.on("SIGTERM", () => { void shutdown(); });
+  process.on("SIGINT", () => { void shutdown(); });
   await app.listen({ port: config.apiPort, host: "0.0.0.0" });
   app.log.info(`NetPulse API running on port ${config.apiPort}`);
-  app.log.info(`Swagger docs at http://localhost:${config.apiPort}/docs`);
-
-  try {
-    const engine = startPollingEngine({
-      redisUrl: config.redisUrl,
-      databaseUrl: config.databaseUrl,
-      concurrency: 10,
-    });
-    await engine.schedulePolling();
-    app.log.info("Polling engine started");
-  } catch (err) {
-    app.log.error({ err }, "Failed to start polling engine");
-  }
 }
 
-main().catch((err) => {
-  console.error("Failed to start server:", err);
-  process.exit(1);
-});
+main().catch(error => { console.error("Failed to start server:", error); process.exit(1); });

@@ -1,8 +1,10 @@
+import { bodySchema } from "../services/contracts.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { users } from "@netpulse/shared";
 import bcrypt from "bcryptjs";
+import { logAudit } from "./audit-logs.js";
 import { authenticate } from "../middleware/auth.js";
 
 const loginSchema = z.object({
@@ -15,12 +17,12 @@ const loginSchema = z.object({
  */
 export async function authRoutes(app: FastifyInstance) {
   // Login
-  app.post("/login", async (request, reply) => {
+  app.post("/login", { schema: bodySchema(loginSchema) }, async (request, reply) => {
     const body = loginSchema.parse(request.body);
     const user = await app.db.query.users.findFirst({
       where: eq(users.email, body.email),
     });
-    if (!user || !user.passwordHash) {
+    if (!user?.enabled || !user.passwordHash) {
       return reply.code(401).send({ error: "Invalid credentials" });
     }
     const valid = await bcrypt.compare(body.password, user.passwordHash);
@@ -28,7 +30,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: "Invalid credentials" });
     }
     await app.db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
-    const token = app.jwt.sign({ id: user.id, role: user.role });
+    const token = app.jwt.sign({ id: user.id, role: user.role, authVersion: user.authVersion });
     return {
       user: { id: user.id, email: user.email, name: user.name, role: user.role },
       token,
@@ -36,29 +38,19 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // Get current user
-  app.get("/me", { preHandler: [async (req: any, rep: any) => {
-    try {
-      const decoded = await req.jwtVerify();
-      req.userId = decoded.id;
-    } catch {
-      rep.code(401).send({ error: "Unauthorized" });
-    }
-  }] }, async (request: any) => {
-    const user = await app.db.query.users.findFirst({
-      where: eq(users.id, request.userId!),
-      columns: { passwordHash: false },
-    });
-    return user;
+  app.get("/me", { preHandler: [authenticate] }, async (request) => {
+    return app.db.query.users.findFirst({ where: eq(users.id, request.userId!), columns: { passwordHash: false, authVersion: false } });
   });
 
   // Update profile
   app.put("/profile", { preHandler: [authenticate] }, async (request, reply) => {
-    const body = z.object({ name: z.string().min(1).max(255) }).parse(request.body);
+    const body = z.object({ name: z.string().min(1).max(255), phone: z.string().max(50).nullable().optional() }).parse(request.body);
     const [updated] = await app.db.update(users)
-      .set({ name: body.name, updatedAt: new Date() })
+      .set({ ...body, updatedAt: new Date() })
       .where(eq(users.id, request.userId!))
-      .returning({ id: users.id, name: users.name, email: users.email, role: users.role });
+      .returning({ id: users.id, name: users.name, email: users.email, role: users.role, phone: users.phone });
     if (!updated) return reply.code(404).send({ error: "User not found" });
+    await logAudit(app.db, { userId: request.userId, action: "profile.update", resource: "user", resourceId: request.userId, details: body, ipAddress: request.ip }, request);
     return updated;
   });
 
@@ -70,16 +62,17 @@ export async function authRoutes(app: FastifyInstance) {
     }).parse(request.body);
 
     const user = await app.db.query.users.findFirst({ where: eq(users.id, request.userId!) });
-    if (!user || !user.passwordHash) return reply.code(404).send({ error: "User not found" });
+    if (!user?.enabled || !user.passwordHash) return reply.code(404).send({ error: "User not found" });
 
     const valid = await bcrypt.compare(body.currentPassword, user.passwordHash);
     if (!valid) return reply.code(400).send({ error: "Current password is incorrect" });
 
     const newHash = await bcrypt.hash(body.newPassword, 12);
     await app.db.update(users)
-      .set({ passwordHash: newHash, updatedAt: new Date() })
+      .set({ passwordHash: newHash, authVersion: sql`${users.authVersion} + 1`, updatedAt: new Date() })
       .where(eq(users.id, request.userId!));
 
-    return { ok: true, message: "Password updated" };
+    await logAudit(app.db, { userId: request.userId, action: "password.update", resource: "user", resourceId: request.userId, ipAddress: request.ip }, request);
+    return { ok: true, message: "Password updated; sign in again" };
   });
 }

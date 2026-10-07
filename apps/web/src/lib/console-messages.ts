@@ -1,0 +1,125 @@
+// Literal English keys are used for new console copy; existing dotted keys remain supported.
+export const consoleKo: Record<string, string> = {
+  "No connections are available within your device scope.": "접근 가능한 장비 범위에 연결 정보가 없습니다.",
+  "Details": "상세 정보", "Device groups": "장비 그룹", "Network discovery": "네트워크 탐색",
+  "Access denied": "접근 권한 없음", "Return to dashboard": "대시보드로 이동",
+  "Your current role or resource scope does not allow this page.": "현재 역할 또는 장비 접근 범위로는 이 페이지를 볼 수 없습니다.",
+  "Retry": "다시 시도", "Account": "내 계정", "Channel settings": "알림 채널 설정",
+  "Network health": "네트워크 상태", "Needs attention": "확인이 필요한 항목",
+  "Active incidents": "진행 중인 인시던트", "Devices down": "중단된 장비", "Devices warning": "경고 상태 장비",
+  "All devices": "전체 장비", "All incidents": "전체 인시던트", "Last 6 hours": "최근 6시간",
+  "Updates automatically every 30 seconds.": "30초마다 자동으로 갱신됩니다.",
+  "Refresh": "새로고침", "No devices": "등록된 장비가 없습니다.", "No recent alerts": "최근 알림이 없습니다.",
+  "No active problems": "현재 발생 상태의 인시던트가 없습니다.", "Loading": "불러오는 중",
+  "Device": "장비", "Incident": "인시던트", "Severity": "심각도", "CPU (%)": "CPU (%)",
+  "No metric samples": "선택한 기간에 수집된 메트릭이 없습니다.", "No CPU samples": "수집된 CPU 메트릭이 없습니다.",
+  "All dashboards": "전체 대시보드", "Dashboard name": "대시보드 이름", "Shared dashboard": "공유 대시보드",
+  "My default dashboard": "기본 대시보드로 사용", "Add widget": "위젯 추가", "Save dashboard": "대시보드 저장",
+  "Edit dashboard": "대시보드 편집", "Dashboard saved": "대시보드를 저장했습니다.", "Dashboard not found": "대시보드를 찾을 수 없습니다.",
+  "Configure widget": "위젯 설정", "Apply widget": "위젯 적용", "Widget type": "위젯 유형", "Title": "제목",
+  "Metric": "메트릭", "Text": "텍스트", "Remove": "제거", "Move widget": "위젯 이동", "Resize widget": "위젯 크기 변경",
+  "Use arrow keys to move or resize, Enter to apply, and Escape to cancel.": "방향키로 이동 또는 크기를 변경하고 Enter로 적용하거나 Escape로 취소합니다.",
+  "Layout updated": "배치를 변경했습니다.", "Layout change started": "배치 변경을 시작했습니다.",
+  "Layout change cancelled": "배치 변경을 취소했습니다.", "Widget removed": "위젯을 제거했습니다.",
+  "Add widgets to monitor network health, incidents, and metrics.": "위젯을 추가하여 네트워크 상태, 인시던트와 메트릭을 모니터링하세요.",
+  "Name is required.": "이름을 입력하세요.", "Select a device.": "장비를 선택하세요.", "Select a device": "장비 선택",
+  "Summary": "상태 요약", "Throughput": "네트워크 트래픽", "Top devices": "주요 장비", "Notes": "메모",
+  "Create group": "그룹 생성", "Edit group": "그룹 편집", "Save group": "그룹 저장", "No device groups": "장비 그룹이 없습니다.",
+  "Group devices to manage access and monitoring scope.": "장비를 그룹으로 묶어 접근 권한과 모니터링 범위를 관리하세요.",
+  "Delete group": "그룹 삭제", "Delete this group? Devices will remain available.": "이 그룹을 삭제할까요? 그룹에 속한 장비는 유지됩니다.",
+  "SMTP host": "SMTP 서버", "SMTP port": "SMTP 포트", "SMTP username": "SMTP 사용자 이름", "SMTP password": "SMTP 비밀번호",
+  "Sender email": "발신자 이메일", "Recipient email": "수신자 이메일", "Bot token": "봇 토큰", "Chat ID": "채팅 ID",
+  "Webhook URL": "웹훅 URL", "Account SID": "계정 SID", "Auth token": "인증 토큰", "Sender number": "발신 번호",
+  "Recipient number": "수신 번호", "Routing key": "라우팅 키", "HTTP headers": "HTTP 헤더", "Message template": "메시지 템플릿",
+  "Optional": "선택 사항", "Required": "필수", "Enter a valid email address.": "올바른 이메일 주소를 입력하세요.",
+  "Enter an HTTP or HTTPS URL.": "HTTP 또는 HTTPS URL을 입력하세요.", "Enter a port between 1 and 65535.": "1~65535 사이의 포트를 입력하세요.",
+  "Enter a value.": "값을 입력하세요.", "Advanced settings": "추가 설정", "One header per line: Name: value": "한 줄에 하나의 헤더를 입력하세요: 이름: 값",
+  "Raw data": "원본 데이터", "Monitoring period": "모니터링 기간", "Included devices": "대상 장비",
+  "Availability": "가용성", "Samples": "표본 수", "Average": "평균", "Maximum": "최대", "Minimum": "최소",
+  "No observations": "수집된 관측 데이터가 없습니다.", "No samples": "표본 없음", "Root cause": "근본 원인",
+  "Confidence": "신뢰도", "Affected resources": "영향을 받는 리소스", "Recommended actions": "권장 조치",
+};
+
+Object.assign(consoleKo, {
+  "Time": "시간", "Value": "값", "No matching series": "표시할 계열이 없습니다.", "Latest 10 incidents": "최근 인시던트 10건",
+  "Dashboard settings": "대시보드 설정", "Unsupported widget": "지원하지 않는 위젯입니다.", "Save failed": "저장하지 못했습니다.",
+  "metric.cpu": "CPU 사용률", "metric.memory": "메모리 사용률", "metric.bandwidth_in": "수신 트래픽", "metric.bandwidth_out": "송신 트래픽", "metric.latency": "응답 지연", "metric.ping": "장비 응답", "metric.snmp_trap": "SNMP 트랩",
+  "role.super_admin": "최고 관리자", "role.admin": "관리자", "role.operator": "운영자", "role.viewer": "조회 사용자",
+  "event.created": "발생", "event.acknowledged": "확인", "event.resolved": "해결", "event.comment": "댓글", "event.escalated": "에스컬레이션", "event.ai_analysis": "AI 분석",
+  "scan.waiting": "대기 중", "scan.active": "탐색 중", "scan.completed": "완료", "scan.failed": "실패", "scan.delayed": "예약됨",
+  "channelType.in_app": "앱 내 알림", "In-app notification": "앱 내 알림",
+  "Leave blank to retain the stored secret.": "비워두면 저장된 비밀 값을 유지합니다.", "Enter valid HTTP header names and values.": "올바른 HTTP 헤더 이름과 값을 입력하세요.",
+  "Notifications are delivered inside NetPulse. No external credentials are needed.": "NetPulse 내부에서 알림을 전달합니다. 외부 인증 정보는 필요하지 않습니다.",
+  "Channel save failed": "알림 채널을 저장하지 못했습니다.", "Observed availability (weighted samples)": "관측 가용성 (표본 수 기준)",
+  "Average incident duration": "평균 인시던트 지속 시간", "minutes": "분", "days": "일", "devices": "장비", "groups": "그룹",
+  "System": "시스템", "User": "사용자", "Overview": "개요", "Configured": "설정됨", "Not configured": "미설정",
+  "Metric query": "메트릭 조회 조건", "Aggregation interval": "집계 간격", "Select a time range.": "시간 범위를 선택하세요.",
+  "Start time must be before end time.": "시작 시간은 종료 시간보다 빨라야 합니다.", "Times are shown in your local timezone.": "현재 브라우저의 현지 시간대로 표시됩니다.",
+  "Explore collected metrics for a device and time range.": "장비와 기간을 선택하여 수집된 메트릭을 확인하세요.",
+  "Anomalies use the latest samples for the selected device and metric.": "이상 탐지는 선택한 장비·메트릭의 최근 표본을 기준으로 합니다.",
+  "Prediction uses the recent trend, independent of the displayed time range.": "예측은 차트에 표시된 기간과 별도로 최근 추세를 기준으로 계산합니다.",
+  "Standard deviation": "표준 편차", "No anomalies detected": "감지된 이상이 없습니다.", "Enter a numeric threshold.": "임계값을 숫자로 입력하세요.",
+  "Current average": "현재 평균", "Estimated time to threshold": "임계값 도달 예상 시간", "No reliable prediction is available.": "신뢰할 수 있는 예측 데이터가 부족합니다.", "Prediction failed": "예측을 실행하지 못했습니다.",
+  "Ask about devices, metrics, and incidents within your access scope.": "접근 가능한 장비·메트릭·인시던트에 관해 질문하세요.",
+  "Which devices are currently down?": "현재 중단된 장비는 어떤 것인가요?", "Show the devices with the highest CPU usage.": "CPU 사용률이 높은 장비를 보여주세요.", "How many incidents were opened today?": "오늘 발생한 인시던트는 몇 건인가요?",
+  "Select an incident": "인시던트 선택", "View incident details": "인시던트 상세 보기", "Ask about the incident cause, affected resources, or next actions.": "원인, 영향 범위 또는 다음 조치에 관해 질문하세요.",
+  "You": "사용자", "AI Assistant": "AI 어시스턴트", "Provider settings": "AI 제공자 설정", "Chat request failed": "대화를 요청하지 못했습니다.",
+  "All polling-enabled devices": "폴링이 활성화된 모든 장비", "Discover neighboring devices and network connections using configured SNMP access.": "설정된 SNMP 접속 정보로 인접 장비와 네트워크 연결을 탐색합니다.",
+  "View topology": "토폴로지 보기", "Start a scan": "탐색 시작", "Scan scope": "탐색 대상", "New devices inherit the source group and polling credentials. Review discovered devices after scanning.": "새 장비는 원본 장비의 그룹과 폴링 인증 정보를 상속합니다. 탐색 후 생성된 장비를 확인하세요.",
+  "Scan queued. Results will update automatically.": "탐색 요청을 등록했습니다. 결과는 자동으로 갱신됩니다.", "Run discovery": "탐색 실행", "Recent scans": "최근 탐색", "Completed with errors": "일부 오류와 함께 완료",
+  "Queued at": "요청 시각", "Neighbors": "인접 장비", "New devices": "새 장비", "No discovery jobs. Start a scan to find neighboring devices.": "탐색 이력이 없습니다. 탐색을 시작하여 인접 장비를 찾아보세요.", "Scan results": "탐색 결과", "Protocol": "프로토콜", "No neighbors found": "발견된 인접 장비가 없습니다.", "Discovery failed": "탐색을 실행하지 못했습니다.",
+  "All groups": "전체 그룹", "Focus device": "장비 찾기", "Find a device by name or IP": "장비 이름 또는 IP로 검색", "Fit all devices": "전체 장비 보기", "Auto layout": "자동 배치", "Save layout": "배치 저장", "Layout saved": "배치를 저장했습니다.",
+  "Graph controls": "그래프 조작", "Zoom in": "확대", "Zoom out": "축소", "Toggle graph interaction": "그래프 조작 전환", "Manage connections": "연결 관리", "Network connections": "네트워크 연결", "Device locations": "장비 위치",
+  "Rule condition": "알림 조건", "Resource scope": "대상 범위", "Notification policy": "알림 정책", "Select a metric.": "메트릭을 선택하세요.", "Rule update failed": "알림 규칙을 저장하지 못했습니다.",
+  "SSH configuration backup": "SSH 구성 백업", "Enter an IP address.": "IP 주소를 입력하세요.", "Select a device type.": "장비 유형을 선택하세요.",
+  "Your selected theme stays active regardless of the system appearance.": "선택한 테마를 시스템 화면 설정과 관계없이 유지합니다.",
+  "Select a valid start date and time.": "올바른 시작 날짜와 시간을 선택하세요.", "End time must be after start time.": "종료 시간은 시작 시간보다 늦어야 합니다.",
+  "Start date": "시작 날짜", "Start time": "시작 시간", "End date": "종료 날짜", "End time": "종료 시간", "Recurrence schedule": "반복 일정", "Schedule": "일정", "Daily at 02:00": "매일 02:00", "Sundays at 02:00": "매주 일요일 02:00", "Weekdays at 02:00": "평일 02:00", "Custom cron expression": "직접 cron 식 입력", "Recurrence timezone": "반복 일정 시간대",
+  "Format: minute hour day month weekday. The first window defines the duration of each recurrence.": "형식: 분 시 일 월 요일. 처음 설정한 시작·종료 시간의 길이를 각 반복에 적용합니다.",
+  "Sign in to your network operations console.": "네트워크 운영 콘솔에 로그인하세요.", "Set up NetPulse": "NetPulse 초기 설정", "Step": "단계", "Enter your name, a valid email address, and a password of at least 8 characters.": "이름, 올바른 이메일 주소와 8자 이상의 비밀번호를 입력하세요.",
+  "Acknowledged By": "확인한 사용자", "Actions": "작업", "Add a note...": "메모 입력", "Add connection": "연결 추가", "Are you sure you want to delete": "다음 항목을 삭제할까요:", "? This action cannot be undone.": "삭제 후에는 복구할 수 없습니다.",
+  "Authentication key": "인증 키", "Authentication protocol": "인증 프로토콜", "Capture via SSH": "SSH로 수집", "Close": "닫기", "Configuration command": "구성 조회 명령", "Configure device coordinates": "장비 좌표 설정", "Connection settings": "접속 설정",
+  "Copy Key": "키 복사", "Copy Link": "링크 복사", "Create a custom dashboard to visualize your network data.": "사용자 대시보드를 만들어 필요한 네트워크 데이터를 모아보세요.", "Create a maintenance window to suppress alerts during planned work.": "계획된 작업 중 알림을 억제할 유지보수 일정을 생성하세요.", "Create a snapshot to track device configuration changes.": "스냅샷을 생성하여 장비 구성 변경을 추적하세요.",
+  "Create an API key to get started.": "외부 연동에 사용할 API 키를 생성하세요.", "A descriptive name for this API key.": "사용 목적을 알아볼 수 있는 이름을 입력하세요.", "Date range": "날짜 범위", "Device group": "장비 그룹", "Devices": "장비", "Diff Preview": "변경 내용 비교", "Display name shown in the top navigation.": "상단 탐색에 표시할 이름입니다.", "Edit": "편집", "Email": "이메일", "Errors": "오류",
+  "Escalation channels": "에스컬레이션 채널", "Escalation delay (minutes)": "에스컬레이션 대기 시간 (분)", "Expires At": "만료 시각", "Find keys": "API 키 검색", "Find users": "사용자 검색", "Fit device locations": "전체 장비 위치 보기", "Full name": "이름", "General": "일반", "Incident not found": "인시던트를 찾을 수 없습니다.",
+  "Invite users to get started.": "초대 링크로 사용자를 추가하세요.", "Latitude / longitude": "위도 / 경도", "Make this dashboard visible to all users": "모든 사용자에게 이 대시보드 공유", "Map tiles are unavailable. Device markers and the location table remain available.": "지도 배경을 불러오지 못했습니다. 장비 표시와 위치 표는 사용할 수 있습니다.", "Method / port": "탐색 방식 / 포트",
+  "Minimum 30 seconds": "최소 30초", "Minimum 8 characters": "최소 8자", "Missing coordinates": "좌표 미설정", "Located devices": "좌표 설정 장비", "No API keys": "API 키가 없습니다.", "No audit logs": "감사 로그가 없습니다.", "No authorized devices have coordinates. Add latitude and longitude in the device editor.": "접근 가능한 장비에 좌표가 없습니다. 장비 편집에서 위도와 경도를 설정하세요.", "No config snapshots": "구성 스냅샷이 없습니다.",
+  "No connections. Run discovery or add a connection.": "연결 정보가 없습니다. 장비 탐색을 실행하거나 연결을 추가하세요.", "No dashboards": "사용자 대시보드가 없습니다.", "No devices have been added yet.": "모니터링할 첫 장비를 등록하세요.", "No devices match the current filters.": "현재 필터에 맞는 장비가 없습니다.", "No devices match the search text.": "검색어에 맞는 장비가 없습니다.", "No differences found between the two snapshots.": "두 스냅샷의 구성 내용이 같습니다.", "No events recorded.": "기록된 이벤트가 없습니다.", "No group": "그룹 없음", "No incidents": "인시던트가 없습니다.", "No incidents match the current filters.": "현재 필터에 맞는 인시던트가 없습니다.",
+  "No interfaces": "인터페이스가 없습니다.", "No interfaces discovered for this device.": "이 장비에서 발견된 인터페이스가 없습니다.", "No invitations": "초대가 없습니다.", "No logs match the current filters.": "현재 필터에 맞는 감사 로그가 없습니다.", "No maintenance windows": "유지보수 일정이 없습니다.", "No matches": "일치하는 결과가 없습니다.", "No matching keys": "검색 조건에 맞는 API 키가 없습니다.", "No matching users": "검색 조건에 맞는 사용자가 없습니다.", "No metrics data available for the selected range.": "선택한 기간에 수집된 메트릭이 없습니다.", "No pending invitations.": "대기 중인 초대가 없습니다.", "No users": "사용자가 없습니다.",
+  "Notification channels": "알림 채널", "Optional connection metadata for configuration backups.": "구성 백업을 위한 선택 접속 설정입니다.", "Optional. Leave blank for a generic invite link.": "선택 사항입니다. 비워두면 이메일이 지정되지 않은 초대 링크를 만듭니다.", "Optional. Leave blank for no expiration.": "선택 사항입니다. 비워두면 만료되지 않습니다.", "Optional. URL to your organization logo": "선택 사항입니다. 조직 로고의 URL을 입력하세요.", "Password": "비밀번호", "Paste device configuration here": "장비 구성 내용을 붙여넣으세요.", "Press Enter to add a tag": "Enter를 눌러 태그를 추가하세요.",
+  "Privacy key": "암호화 키", "Privacy protocol": "암호화 프로토콜", "Role": "역할", "Runbook URL": "대응 절차 URL", "SNMPv3 username": "SNMPv3 사용자 이름", "SSH host": "SSH 서버", "SSH port": "SSH 포트", "SSH private key": "SSH 개인 키", "SSH username": "SSH 사용자 이름", "Save access": "접근 권한 저장", "Scope": "접근 범위", "Security level": "보안 수준",
+  "Select one device and/or group. When both are selected, the device must belong to that group.": "장비 또는 그룹을 하나씩 선택하세요. 둘 다 선택하면 장비는 해당 그룹에 속해야 합니다.", "Source": "출발 장비", "Source device": "출발 장비", "Status": "상태", "Super administrator": "최고 관리자", "Target": "도착 장비", "Target device": "도착 장비", "Token": "초대 토큰", "Trusted SSH host fingerprint": "신뢰할 SSH 서버 지문", "URL to the logo image displayed in the header.": "상단에 표시할 로고 이미지 URL입니다.", "Used At": "사용 시각", "User ID": "사용자 ID", "Write a comment...": "댓글 입력",
+  "Complete your registration to join NetPulse": "가입 정보를 입력하여 NetPulse에 참여하세요.", "Accept Invitation": "초대 수락", "Create account": "계정 생성", "Account enabled": "계정 활성화",
+  "SHA256:base64 or 64-character SHA256 hex. Verify it with your device administrator.": "SHA256:base64 또는 64자리 SHA256 16진수입니다. 장비 관리자에게 지문을 확인하세요.",
+  "Leave blank to retain the stored key.": "비워두면 저장된 키를 유지합니다.", "Leave blank to retain the encrypted stored key.": "비워두면 암호화하여 저장된 키를 유지합니다.", "At least 8 characters.": "8자 이상 입력하세요.", "Used to capture configuration over SSH.": "SSH로 구성을 수집할 때 사용합니다.", "Type a device name or IP. Selected devices and groups are combined.": "장비 이름 또는 IP로 검색하세요. 선택한 장비와 그룹을 함께 적용합니다.",
+});
+
+for (const resource of ["API keys", "audit logs", "config snapshots", "dashboards", "devices", "incidents", "interfaces", "invitations", "maintenance windows", "users"]) consoleKo[`Loading ${resource}...`] = "불러오는 중";
+consoleKo["Loading..."] = "불러오는 중";
+Object.assign(consoleKo, {
+  "Visible columns": "표시할 열", "Choose and reorder the columns shown in this table.": "표시할 열과 순서를 선택하세요.", "Snapshot details": "스냅샷 상세 정보", "System / removed account": "시스템 / 삭제된 계정",
+  "> (greater than)": "> (초과)", ">= (greater or equal)": ">= (이상)", "< (less than)": "< (미만)", "<= (less or equal)": "<= (이하)", "== (equal)": "== (같음)", "!= (not equal)": "!= (다름)",
+  "Report generation failed": "리포트를 생성하지 못했습니다.", "Failed to create snapshot.": "스냅샷을 생성하지 못했습니다.", "Failed to create dashboard.": "대시보드를 생성하지 못했습니다.", "Failed to create API key.": "API 키를 생성하지 못했습니다.", "Failed to create invitation.": "초대를 생성하지 못했습니다.", "Provider save failed": "AI 제공자를 저장하지 못했습니다.", "Enter a provider name and API key.": "제공자 이름과 API 키를 입력하세요.", "Enter configuration text or a capture command.": "구성 내용 또는 수집 명령을 입력하세요.",
+  "scope.all": "모든 장비", "scope.restricted": "지정한 장비·그룹", "No reports generated": "생성된 리포트가 없습니다.", "Generate a report to review collected observations for a period.": "리포트를 생성하여 기간별 관측 데이터를 검토하세요.", "No alert rules": "알림 규칙이 없습니다.", "Define a condition to detect problems in collected metrics.": "수집된 메트릭에서 문제를 감지할 조건을 정의하세요.", "No matching alert rules": "검색 조건에 맞는 알림 규칙이 없습니다.", "No notification channels": "알림 채널이 없습니다.", "Configure a channel to deliver incident notifications.": "인시던트 알림을 전달할 채널을 설정하세요.", "No delivery history": "알림 전송 이력이 없습니다.", "No AI providers": "AI 제공자가 없습니다.", "Configure a provider to use AI queries and incident assistance.": "AI 질의와 인시던트 분석에 사용할 제공자를 설정하세요.", "Custom": "사용자 정의",
+});
+export const consoleEn: Record<string, string> = {
+  "metric.cpu": "CPU utilization", "metric.memory": "Memory utilization", "metric.bandwidth_in": "Inbound traffic", "metric.bandwidth_out": "Outbound traffic", "metric.latency": "Latency", "metric.ping": "Device response", "metric.snmp_trap": "SNMP trap",
+  "role.super_admin": "Super administrator", "role.admin": "Administrator", "role.operator": "Operator", "role.viewer": "Viewer",
+  "event.created": "Opened", "event.acknowledged": "Acknowledged", "event.resolved": "Resolved", "event.comment": "Comment", "event.escalated": "Escalated", "event.ai_analysis": "AI analysis",
+  "scan.waiting": "Waiting", "scan.active": "Scanning", "scan.completed": "Completed", "scan.failed": "Failed", "scan.delayed": "Scheduled",
+  "scope.all": "All devices", "scope.restricted": "Selected devices and groups", "channelType.in_app": "In-app notification", "common.total": "Total", "common.user": "User",
+};
+Object.assign(consoleKo, { "common.total": "전체", "common.user": "사용자" });
+Object.assign(consoleKo, { "Yes": "예", "No": "아니요", "Never": "없음", "Done": "완료", "Delete device": "장비 삭제", "Device geographic map": "장비 위치 지도" });
+consoleKo["Last hour"] = "최근 1시간";
+Object.assign(consoleKo, { "Manual": "수동", "name": "이름", "status": "상태", "ip": "IP 주소", "type": "유형", "location": "위치", "value": "값", "timestamp": "시각", "Alert Rule": "알림 규칙", "API Key": "API 키", "Notification Channel": "알림 채널", "Maintenance Window": "유지보수 일정", "Report": "리포트", "Select a metric or enter its name.": "메트릭을 선택하거나 수집된 메트릭 이름을 입력하세요." });
+Object.assign(consoleKo, {
+  "API key is required.": "API 키를 입력하세요.", "Ask about network resources and investigate incidents.": "네트워크 리소스에 관해 질문하고 인시던트를 분석하세요.", "Ask about the probable cause, troubleshooting steps, or recovery actions.": "예상 원인, 점검 방법 또는 복구 조치에 관해 질문하세요.", "Delete failed": "삭제하지 못했습니다.", "Deletion failed": "삭제하지 못했습니다.", "Error loading devices:": "장비를 불러오지 못했습니다:", "Failed to change password": "비밀번호를 변경하지 못했습니다.", "Failed to load interfaces:": "인터페이스를 불러오지 못했습니다:", "Failed to save.": "저장하지 못했습니다.", "Leave blank to keep the existing credential.": "비워두면 저장된 인증 정보를 유지합니다.", "No active incidents": "진행 중인 인시던트가 없습니다.", "No matching results": "조건에 맞는 결과가 없습니다.", "Open incident details": "인시던트 상세 보기", "Query failed": "질의를 실행하지 못했습니다.", "Remove this AI provider?": "이 AI 제공자를 삭제할까요?", "Select an incident to ask about its device, events, and recent metrics.": "장비, 이벤트와 최근 메트릭을 분석할 인시던트를 선택하세요.",
+  "No devices down": "중단된 장비가 없습니다.", "No devices warning": "경고 상태 장비가 없습니다.", "Edit user access": "사용자 접근 권한 편집", "User access updated. Existing sessions were revoked.": "사용자 접근 권한을 변경했습니다. 기존 세션은 해제되었습니다.", "Update failed": "변경하지 못했습니다.", "Copied to clipboard.": "클립보드에 복사했습니다.", "All Actions": "모든 작업", "All Resources": "모든 리소스", "Create": "생성", "Update": "변경", "Delete": "삭제", "Login": "로그인", "Logout": "로그아웃", "devices": "장비", "users": "사용자", "alert_rules": "알림 규칙", "notifications": "알림", "Select a complete date range.": "시작일과 종료일을 모두 선택하세요.", "IP": "IP 주소", "s": "초",
+  "Initial snapshot": "최초 스냅샷", "No invitation token provided": "초대 링크가 필요합니다.", "Invalid or expired invitation": "유효하지 않거나 만료된 초대입니다.", "Registration failed": "계정을 생성하지 못했습니다.",
+});
+
+consoleKo["Any email address"] = "모든 이메일 주소";
+Object.assign(consoleKo, { "Unable to check setup status.": "초기 설정 상태를 확인하지 못했습니다.", "Initial setup is complete": "초기 설정이 완료되었습니다.", "This site already has an administrator. Sign in to manage the site settings.": "관리자가 등록된 사이트입니다. 로그인 후 사이트 설정을 관리하세요." });
+Object.assign(consoleKo, { "CPU (%) · Latest observation within 10 minutes": "CPU (%) · 최근 10분 이내의 최신 관측값", "Enter your email address and password.": "이메일과 비밀번호를 입력하세요." });
+Object.assign(consoleKo, { "All users": "모든 사용자", "ai": "AI", "reports": "리포트", "dashboard": "대시보드", "topology": "토폴로지", "auth": "인증", "api-key": "API 키", "user": "사용자", "invitation": "초대", "device-groups": "장비 그룹", "maintenance-windows": "유지보수", "config-snapshots": "설정 스냅샷", "discovery": "네트워크 탐색", "site-settings": "사이트 설정", "incidents": "인시던트", "alert-rules": "알림 규칙" });

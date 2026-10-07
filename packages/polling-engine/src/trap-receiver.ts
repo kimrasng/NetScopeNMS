@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
 import snmp from "net-snmp";
-import { createDb, devices } from "@netpulse/shared";
+import { createDb, devices, type SnmpV3Config } from "@netpulse/shared";
 import { eq } from "drizzle-orm";
 
 // ─── Interfaces ──────────────────────────────────────
@@ -13,6 +13,7 @@ export interface TrapReceiverConfig {
   disableAuthorization?: boolean;
   redisUrl?: string;
   databaseUrl?: string;
+  users?: SnmpV3Config[];
 }
 
 export interface TrapEvent {
@@ -34,10 +35,12 @@ export class TrapReceiver extends EventEmitter {
   private config: Required<Pick<TrapReceiverConfig, "port" | "community" | "disableAuthorization">> & {
     redisUrl?: string;
     databaseUrl?: string;
+    users?: SnmpV3Config[];
   };
   private receiver: ReturnType<typeof snmp.createReceiver> | null = null;
   private trapQueue: Queue | null = null;
   private redis: IORedis | null = null;
+  private client: ReturnType<typeof createDb>["client"] | null = null;
   private db: ReturnType<typeof createDb>["db"] | null = null;
 
   constructor(config: TrapReceiverConfig = {}) {
@@ -48,6 +51,7 @@ export class TrapReceiver extends EventEmitter {
       disableAuthorization: config.disableAuthorization ?? false,
       redisUrl: config.redisUrl,
       databaseUrl: config.databaseUrl,
+      users: config.users,
     };
   }
 
@@ -61,13 +65,14 @@ export class TrapReceiver extends EventEmitter {
     }
 
     if (this.config.databaseUrl) {
-      const { db } = createDb(this.config.databaseUrl);
-      this.db = db;
+      const { db, client } = createDb(this.config.databaseUrl);
+      this.db = db; this.client = client;
     }
 
     this.receiver = snmp.createReceiver(
       {
         port: this.config.port,
+        includeAuthentication: true,
         community: this.config.community,
         disableAuthorization: this.config.disableAuthorization,
       },
@@ -82,6 +87,12 @@ export class TrapReceiver extends EventEmitter {
       },
     );
 
+    const authorizer = this.receiver.getAuthorizer();
+    authorizer.addCommunity(this.config.community);
+    const level = { noAuthNoPriv: 1, authNoPriv: 2, authPriv: 3 };
+    const auth = { MD5: 2, SHA: 3, SHA224: 4, SHA256: 5, SHA384: 6, SHA512: 7 };
+    const privacy = { DES: 2, AES: 4, AES256: 6 };
+    for (const user of this.config.users ?? []) authorizer.addUser({ name: user.username, level: level[user.securityLevel], authProtocol: user.authProtocol ? auth[user.authProtocol] : undefined, authKey: user.authKey, privProtocol: user.privProtocol ? privacy[user.privProtocol] : undefined, privKey: user.privKey });
     this.emit("listening", { port: this.config.port });
   }
 
@@ -100,6 +111,7 @@ export class TrapReceiver extends EventEmitter {
       this.redis = null;
     }
     this.db = null;
+    if (this.client) { await this.client.end(); this.client = null; }
   }
 
   /** Register a callback for trap events. */
@@ -112,7 +124,7 @@ export class TrapReceiver extends EventEmitter {
     const { pdu, rinfo } = notification;
     const sourceIp = rinfo.address;
 
-    const version = this.detectVersion(pdu.type);
+    const version = pdu.user || pdu.contextEngineID ? "v3" : this.detectVersion(pdu.type);
     const oid = this.extractTrapOid(pdu, version);
     const varbinds = pdu.varbinds.map((vb: snmp.Varbind) => ({
       oid: vb.oid,
@@ -155,7 +167,6 @@ export class TrapReceiver extends EventEmitter {
   /** Detect SNMP version from PDU type. */
   private detectVersion(pduType: number): "v1" | "v2c" | "v3" {
     if (pduType === snmp.PduType.Trap) return "v1";
-    if (pduType === snmp.PduType.InformRequest) return "v3";
     return "v2c";
   }
 

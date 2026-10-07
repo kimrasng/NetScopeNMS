@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 RUN apk add --no-cache dumb-init
 
 FROM base AS deps
@@ -10,10 +10,12 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/ai-engine/package.json packages/ai-engine/
 COPY packages/notification/package.json packages/notification/
 COPY packages/polling-engine/package.json packages/polling-engine/
-RUN yarn install --frozen-lockfile || yarn install
+RUN yarn install --frozen-lockfile
 
 FROM base AS builder
 WORKDIR /app
+ARG NEXT_PUBLIC_API_URL=http://localhost:4000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN cd apps/web && npx next build
