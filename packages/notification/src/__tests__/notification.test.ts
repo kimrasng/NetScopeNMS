@@ -76,6 +76,19 @@ describe("Notification", () => {
       expect(url).toContain("api.telegram.org/botbot123/sendMessage");
     });
 
+    it("delivers Telegram alerts when the incident URL is a loopback address", async () => {
+      fetchMock.mockImplementation((_url: string, options: RequestInit) => {
+        const body = JSON.parse(String(options.body)) as { reply_markup?: { inline_keyboard: { url: string }[][] } };
+        const link = body.reply_markup?.inline_keyboard[0]?.[0]?.url;
+        const host = link ? new URL(link).hostname : "";
+        const rejected = host === "localhost" || /^127\./.test(host) || host === "[::1]";
+        return Promise.resolve({ ok: !rejected, status: rejected ? 400 : 200 });
+      });
+      for (const incidentUrl of ["http://localhost:13000/notifications", "http://127.0.0.1:13000/notifications", "http://[::1]:13000/notifications"]) {
+        await expect(mod.sendTelegram("qa", "qa", makePayload({ incidentUrl }))).resolves.toBeUndefined();
+      }
+    });
+
     it("routes discord channel", async () => {
       const channel: ChannelConfig = {
         type: "discord",
@@ -183,6 +196,20 @@ describe("Notification", () => {
   });
 
   describe("severity in notifications", () => {
+    it("escapes device and AI text for Telegram formatting", async () => {
+      await mod.sendTelegram("bot", "chat", makePayload({ deviceName: "switch_[core] <A&B>", aiSummary: "CPU *high* <check> & recover" }));
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.parse_mode).toBe("HTML");
+      expect(body.text).toContain("switch_[core] &lt;A&amp;B&gt;");
+      expect(body.text).toContain("CPU *high* &lt;check&gt; &amp; recover");
+    });
+    it("keeps large AI summaries within the Telegram message limit", async () => {
+      await mod.sendTelegram("bot", "chat", makePayload({ aiSummary: "🤖".repeat(8000), event: "resolved" }));
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(Array.from(body.text).length).toBeLessThan(4096);
+      expect(body.text).toContain("Recovery");
+      expect(body.text).toContain("…");
+    });
     it("telegram message includes correct emoji for critical", async () => {
       await mod.sendTelegram("bot", "chat", makePayload({ severity: "critical" }));
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);

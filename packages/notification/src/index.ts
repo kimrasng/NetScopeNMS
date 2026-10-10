@@ -91,13 +91,28 @@ export async function sendEmail(
 // ─── Telegram ────────────────────────────────────────
 export async function sendTelegram(botToken: string, chatId: string, payload: NotificationPayload) {
   const color = SEVERITY_COLORS[payload.severity] || SEVERITY_COLORS.medium;
-  const text = `${color.emoji} *${payload.severity.toUpperCase()} Alert*
+  const escape = (value: string, limit: number) => {
+    const characters = Array.from(value);
+    const bounded = characters.slice(0, limit).join("") + (characters.length > limit ? "…" : "");
+    return bounded.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  };
+  const event = payload.event === "resolved" ? "Recovery" : payload.event === "escalated" ? "Escalated Alert" : payload.event === "test" ? "Test Alert" : "Alert";
+  const text = `${color.emoji} <b>${payload.severity.toUpperCase()} ${event}</b>
 
-*Device:* ${payload.deviceName} (${payload.deviceIp})
-*Alert:* ${payload.alertType}
-*Value:* ${payload.metricValue}
-*Time:* ${payload.timestamp}
-${payload.aiSummary ? `\n*AI Analysis:* ${payload.aiSummary}` : ""}`;
+<b>Device:</b> ${escape(payload.deviceName, 512)} (${escape(payload.deviceIp, 64)})
+<b>Alert:</b> ${escape(payload.alertType, 512)}
+<b>Value:</b> ${escape(payload.metricValue, 256)}
+<b>Time:</b> ${escape(payload.timestamp, 64)}
+${payload.aiSummary ? `\n<b>AI Analysis:</b> ${escape(payload.aiSummary, 1800)}` : ""}`;
+
+  let includeIncidentLink = false;
+  try {
+    const url = new URL(payload.incidentUrl);
+    const loopback = url.hostname === "localhost" || url.hostname.endsWith(".localhost") || /^127\./.test(url.hostname) || url.hostname === "[::1]";
+    includeIncidentLink = ["http:", "https:"].includes(url.protocol) && !loopback;
+  } catch {
+    // A malformed incident link must not prevent the alert itself from being sent.
+  }
 
   await checkedFetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
@@ -105,12 +120,12 @@ ${payload.aiSummary ? `\n*AI Analysis:* ${payload.aiSummary}` : ""}`;
     body: JSON.stringify({
       chat_id: chatId,
       text,
-      parse_mode: "Markdown",
-      reply_markup: {
+      parse_mode: "HTML",
+      ...(includeIncidentLink ? { reply_markup: {
         inline_keyboard: [[
           { text: "🔗 View Incident", url: payload.incidentUrl },
         ]],
-      },
+      } } : {}),
     }),
   });
 }

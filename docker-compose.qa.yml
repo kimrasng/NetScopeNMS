@@ -1,0 +1,156 @@
+name: netpulse-qa
+
+x-device: &device
+  image: netpulse-qa-api
+  command: ["node", "scripts/qa/device-simulator.mjs"]
+  volumes:
+    - ./scripts/qa:/app/scripts/qa:ro
+  healthcheck:
+    test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>{if(!r.ok)process.exit(1)})"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+
+services:
+  artifacts-init:
+    image: netpulse-qa-api
+    user: "0:0"
+    command: ["chown", "1001:1001", "/qa"]
+    volumes: ["qa-results:/qa"]
+    networks: [lab]
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: netpulse
+      POSTGRES_PASSWORD: qa-local-only
+      POSTGRES_DB: netpulse_qa
+    ports: ["127.0.0.1:15432:5432"]
+    volumes: ["qa-db:/var/lib/postgresql/data"]
+    networks: [lab]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netpulse -d netpulse_qa"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    ports: ["127.0.0.1:16379:6379"]
+    networks: [lab]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  api:
+    image: netpulse-qa-api
+    build:
+      context: .
+      target: api
+    command: ["node", "scripts/qa/start.mjs"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://netpulse:qa-local-only@postgres:5432/netpulse_qa
+      REDIS_URL: redis://redis:6379
+      NEXTAUTH_SECRET: qa-disposable-signing-secret-not-for-deployment
+      WEB_ORIGIN: http://localhost:13000
+      CORS_ORIGIN: http://localhost:13000
+      API_PORT: "4000"
+      SNMP_TRAP_ENABLED: "true"
+      SNMP_TRAP_PORT: "1162"
+      SNMP_TRAP_COMMUNITY: public
+      DISCOVERY_ENABLED: "true"
+      DISCOVERY_INTERVAL: "3600"
+      TEST_API_URL: http://127.0.0.1:4000
+      TEST_DATABASE_URL: postgresql://netpulse:qa-local-only@127.0.0.1:15432/netpulse_qa
+      TEST_REDIS_URL: redis://127.0.0.1:16379
+      TEST_OUTPUT_DIR: /qa
+      QA_TRANSPORT_MOCK_URL: http://127.0.0.1:14572
+    ports: ["127.0.0.1:14000:4000"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - qa-results:/qa
+      - ./scripts:/app/scripts:ro
+      - ./packages/polling-engine/src:/app/packages/polling-engine/src:ro
+      - ./packages/notification/src:/app/packages/notification/src:ro
+      - ./packages/ai-engine/src:/app/packages/ai-engine/src:ro
+      - ./apps/api/src:/app/apps/api/src:ro
+      - ./.env.test.local:/app/.env.test.local:ro
+    networks: [lab]
+    depends_on:
+      artifacts-init: {condition: service_completed_successfully}
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+  web:
+    image: netpulse-qa-web
+    build:
+      context: .
+      target: web
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:14000
+    ports: ["127.0.0.1:13000:3000"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/login"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [lab]
+    depends_on:
+      api: {condition: service_healthy}
+  browser:
+    profiles: [test]
+    build:
+      context: .
+      target: qa-browser
+    image: netpulse-qa-browser
+    environment:
+      TEST_OUTPUT_DIR: /qa
+      QA_BROWSER_PACE_MS: "5000"
+    volumes:
+      - qa-results:/qa
+      - ./apps/web/e2e:/app/apps/web/e2e:ro
+      - ./scripts/qa:/app/scripts/qa:ro
+      - ./playwright.config.ts:/app/playwright.config.ts:ro
+    networks: [lab]
+    depends_on:
+      api: {condition: service_healthy}
+      web: {condition: service_healthy}
+  cisco:
+    <<: *device
+    environment: {QA_DEVICE_PROFILE: cisco, QA_NEIGHBOR_IP: 172.28.240.12, QA_NEIGHBOR_NAME: QA-Juniper}
+    networks: {lab: {ipv4_address: 172.28.240.11}}
+  juniper:
+    <<: *device
+    environment: {QA_DEVICE_PROFILE: juniper, QA_NEIGHBOR_IP: 172.28.240.13, QA_NEIGHBOR_NAME: QA-Arista}
+    networks: {lab: {ipv4_address: 172.28.240.12}}
+  arista:
+    <<: *device
+    environment: {QA_DEVICE_PROFILE: arista, QA_NEIGHBOR_IP: 172.28.240.14, QA_NEIGHBOR_NAME: QA-HPE}
+    networks: {lab: {ipv4_address: 172.28.240.13}}
+  hpe:
+    <<: *device
+    environment: {QA_DEVICE_PROFILE: hpe, QA_NEIGHBOR_IP: 172.28.240.15, QA_NEIGHBOR_NAME: QA-Huawei}
+    networks: {lab: {ipv4_address: 172.28.240.14}}
+  huawei:
+    <<: *device
+    environment: {QA_DEVICE_PROFILE: huawei, QA_NEIGHBOR_IP: 172.28.240.16, QA_NEIGHBOR_NAME: QA-Ubuntu}
+    networks: {lab: {ipv4_address: 172.28.240.15}}
+  ubuntu:
+    <<: *device
+    environment: {QA_DEVICE_PROFILE: ubuntu, QA_NEIGHBOR_IP: 172.28.240.17, QA_NEIGHBOR_NAME: QA-Rocky}
+    networks: {lab: {ipv4_address: 172.28.240.16}}
+  rocky:
+    <<: *device
+    environment: {QA_DEVICE_PROFILE: rocky, QA_NEIGHBOR_IP: 172.28.240.11, QA_NEIGHBOR_NAME: QA-Cisco}
+    networks: {lab: {ipv4_address: 172.28.240.17}}
+
+volumes:
+  qa-db:
+  qa-results:
+networks:
+  lab:
+    ipam:
+      config: [{subnet: 172.28.240.0/24}]
