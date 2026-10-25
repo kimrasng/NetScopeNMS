@@ -31,7 +31,7 @@ COPY --chown=appuser:appgroup . .
 FROM runner AS api
 USER appuser
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:4000/api/health || exit 1
+  CMD wget -qO- http://127.0.0.1:4000/api/health || exit 1
 EXPOSE 4000
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["sh", "scripts/start-api.sh"]
@@ -42,8 +42,19 @@ COPY --from=builder --chown=appuser:appgroup /app/apps/web/.next ./apps/web/.nex
 ENV NEXT_TELEMETRY_DISABLED=1
 USER appuser
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD wget -qO- http://localhost:3000/ || exit 1
+  CMD wget -qO- http://127.0.0.1:3000/ || exit 1
 WORKDIR /app/apps/web
 EXPOSE 3000
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["npx", "next", "start", "--port", "3000"]
+
+# QA browser target uses the browser image matching the locked Playwright version.
+FROM mcr.microsoft.com/playwright:v1.56.1-noble AS qa-browser
+WORKDIR /app
+COPY --from=deps /app/node_modules/@playwright ./node_modules/@playwright
+COPY --from=deps /app/node_modules/playwright ./node_modules/playwright
+COPY --from=deps /app/node_modules/playwright-core ./node_modules/playwright-core
+COPY package.json playwright.config.ts ./
+COPY apps/web/e2e ./apps/web/e2e
+COPY scripts/qa ./scripts/qa
+CMD ["node", "scripts/qa/browser.mjs"]

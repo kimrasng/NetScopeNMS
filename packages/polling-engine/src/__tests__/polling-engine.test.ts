@@ -282,11 +282,9 @@ describe("Polling Engine", () => {
       const ifIn1 = [{ oid: "1.3.6.1.2.1.2.2.1.10.1", value: 4294967000 }];
       const ifOut1 = [{ oid: "1.3.6.1.2.1.2.2.1.16.1", value: 1000 }];
 
-      let subtreeCallCount = 0;
-      const subtreeFn1 = vi.fn((_oid: string, _max: number, feedCb: Function, doneCb: Function) => {
-        const datasets = [[], ifNames, ifStatuses, ifIn1, ifOut1];
-        feedCb(datasets[subtreeCallCount].map(v => ({ oid: v.oid, value: v.value })));
-        subtreeCallCount++;
+      const subtreeFn1 = vi.fn((oid: string, _max: number, feedCb: Function, doneCb: Function) => {
+        const rows = [ifNames, ifStatuses, ifIn1, ifOut1].find(dataset => dataset[0].oid.startsWith(oid + ".")) ?? [];
+        feedCb(rows);
         doneCb(null);
       });
 
@@ -308,11 +306,9 @@ describe("Polling Engine", () => {
       const ifIn2 = [{ oid: "1.3.6.1.2.1.2.2.1.10.1", value: 500 }];
       const ifOut2 = [{ oid: "1.3.6.1.2.1.2.2.1.16.1", value: 2000 }];
 
-      subtreeCallCount = 0;
-      const subtreeFn2 = vi.fn((_oid: string, _max: number, feedCb: Function, doneCb: Function) => {
-        const datasets = [[], ifNames, ifStatuses, ifIn2, ifOut2];
-        feedCb(datasets[subtreeCallCount].map(v => ({ oid: v.oid, value: v.value })));
-        subtreeCallCount++;
+      const subtreeFn2 = vi.fn((oid: string, _max: number, feedCb: Function, doneCb: Function) => {
+        const rows = [ifNames, ifStatuses, ifIn2, ifOut2].find(dataset => dataset[0].oid.startsWith(oid + ".")) ?? [];
+        feedCb(rows);
         doneCb(null);
       });
 

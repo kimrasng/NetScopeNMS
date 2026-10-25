@@ -4,6 +4,7 @@ import snmp from "net-snmp";
 import ping from "ping";
 import { createDb, devices, metrics, interfaces as ifTable, incidents, snmpV3Schema } from "@netpulse/shared";
 import { eq, and, ne } from "drizzle-orm";
+import { collectSystemMetrics } from "./system-metrics.js";
 
 export interface PollingConfig {
   redisUrl: string;
@@ -168,27 +169,10 @@ async function pollDevice(device: {
   // SNMP polling
   if (createSession) {
     try {
-      // CPU & Memory
-      const sysMetrics = await snmpGetWithSession(createSession(), [
-        OID.cpuLoad1min, OID.memTotalReal, OID.memAvailReal,
-      ]);
-
-      if (sysMetrics[OID.cpuLoad1min] !== undefined) {
-        result.metrics.push({ name: "load_1m", value: parseFloat(String(sysMetrics[OID.cpuLoad1min])) });
-      }
-      if (sysMetrics[OID.memTotalReal] !== undefined && sysMetrics[OID.memAvailReal] !== undefined) {
-        const total = Number(sysMetrics[OID.memTotalReal]);
-        const avail = Number(sysMetrics[OID.memAvailReal]);
-        if (total > 0) {
-          result.metrics.push({ name: "memory", value: Math.round(((total - avail) / total) * 100), unit: "%" });
-        }
-      }
-
-      try {
-        const processors = await snmpWalkWithSession(createSession(), "1.3.6.1.2.1.25.3.3.1.2");
-        const loads = processors.map(p => Number(p.value)).filter(v => Number.isFinite(v) && v >= 0 && v <= 100);
-        if (loads.length) result.metrics.push({ name: "cpu", value: loads.reduce((sum, value) => sum + value, 0) / loads.length, unit: "%" });
-      } catch { /* A device may not implement HOST-RESOURCES-MIB. */ }
+      result.metrics.push(...await collectSystemMetrics({
+        get: oids => snmpGetWithSession(createSession(), oids),
+        walk: oid => snmpWalkWithSession(createSession(), oid),
+      }));
 
       // Interfaces
       try {

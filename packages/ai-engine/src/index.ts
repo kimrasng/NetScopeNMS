@@ -12,6 +12,7 @@ export interface AIProviderConfig {
   apiKey: string;
   model?: string;
   baseUrl?: string;
+  timeoutMs?: number;
   enabled: boolean;
 }
 
@@ -41,10 +42,14 @@ interface AIResponse {
 
 // ─── Provider Implementations ────────────────────────
 
+function providerFetch(config: AIProviderConfig, url: string, options: RequestInit) {
+  return fetch(url, { ...options, signal: AbortSignal.timeout(config.timeoutMs ?? 60000) });
+}
+
 async function callOpenAI(config: AIProviderConfig, messages: ChatMessage[]): Promise<AIResponse> {
   const model = config.model || "gpt-4o";
   const url = config.baseUrl || "https://api.openai.com/v1/chat/completions";
-  const res = await fetch(url, {
+  const res = await providerFetch(config, url, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
     body: JSON.stringify({ model, messages, temperature: 0.3, max_tokens: 4096 }),
@@ -62,16 +67,25 @@ async function callGemini(config: AIProviderConfig, messages: ChatMessage[]): Pr
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
   }));
-  const body: any = { contents, generationConfig: { temperature: 0.3, maxOutputTokens: 4096 } };
+  const generationConfig = /^gemini-3[.-]/.test(model)
+    ? { temperature: 1, maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: "low" } }
+    : { temperature: 0.3, maxOutputTokens: 4096 };
+  const body: Record<string, unknown> = { contents, generationConfig };
   if (systemMsg) body.systemInstruction = { parts: [{ text: systemMsg.content }] };
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`,
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+  const res = await providerFetch(config,
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": config.apiKey }, body: JSON.stringify(body) },
   );
   if (!res.ok) throw new Error(`Gemini API error: ${res.status} ${await res.text()}`);
-  const data = (await res.json()) as any;
-  return { text: data.candidates?.[0]?.content?.parts?.[0]?.text || "" };
+  const data = (await res.json()) as {
+    candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string }[];
+    promptFeedback?: { blockReason?: string };
+  };
+  const candidate = data.candidates?.[0];
+  const text = candidate?.content?.parts?.filter(part => !part.thought && typeof part.text === "string").map(part => part.text).join("") ?? "";
+  if (!text.trim()) throw new Error(`Gemini returned no answer text (${data.promptFeedback?.blockReason ?? candidate?.finishReason ?? "UNKNOWN"})`);
+  return { text };
 }
 
 async function callClaude(config: AIProviderConfig, messages: ChatMessage[]): Promise<AIResponse> {
@@ -81,7 +95,7 @@ async function callClaude(config: AIProviderConfig, messages: ChatMessage[]): Pr
   const body: any = { model, messages: nonSystemMsgs, max_tokens: 4096, temperature: 0.3 };
   if (systemMsg) body.system = systemMsg.content;
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await providerFetch(config, "https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -97,7 +111,7 @@ async function callClaude(config: AIProviderConfig, messages: ChatMessage[]): Pr
 
 async function callCustom(config: AIProviderConfig, messages: ChatMessage[]): Promise<AIResponse> {
   if (!config.baseUrl) throw new Error("Custom provider requires baseUrl");
-  const res = await fetch(config.baseUrl, {
+  const res = await providerFetch(config, config.baseUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

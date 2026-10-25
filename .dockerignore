@@ -3,6 +3,11 @@ node_modules
 dist
 .git
 .env
+.env.*
+!.env.example
+docs/qa/**/evidence
+playwright-report
+test-results
 *.log
 .turbo
 coverage

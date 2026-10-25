@@ -140,6 +140,28 @@ describe("AIEngine", () => {
       const callUrl = fetchMock.mock.calls[0][0] as string;
       expect(callUrl).toContain("generativelanguage.googleapis.com");
       expect(callUrl).toContain("gemini-2.0-flash");
+      expect(new URL(callUrl).searchParams.has("key")).toBe(false);
+      expect(fetchMock.mock.calls[0][1].headers["x-goog-api-key"]).toBe("test-key");
+    });
+
+    it("joins Gemini answer parts while excluding thought summaries", async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ candidates: [{ content: { parts: [
+          { text: "Private reasoning", thought: true },
+          { text: "First " },
+          { inlineData: { mimeType: "image/png", data: "qa" } },
+          { text: "second" },
+        ] } }] }),
+      });
+      const engine = new AIEngine(makeConfig({ type: "gemini", model: "gemini-3.5-flash" }));
+      expect(await engine.chat([{ role: "user", content: "Summarize the incident" }])).toBe("First second");
+    });
+
+    it("reports a blocked Gemini response instead of an empty successful answer", async () => {
+      fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ promptFeedback: { blockReason: "SAFETY" } }) });
+      const engine = new AIEngine(makeConfig({ type: "gemini" }));
+      await expect(engine.chat([{ role: "user", content: "QA request" }])).rejects.toThrow("Gemini returned no answer text (SAFETY)");
     });
 
     it("routes to Claude provider", async () => {
